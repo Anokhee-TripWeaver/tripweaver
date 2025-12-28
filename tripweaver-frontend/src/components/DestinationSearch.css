@@ -54,12 +54,11 @@ html, body {
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center; /* Center vertically */
   text-align: center;
-  padding: 1800px 20px 50px 90px; /* FIXED */
+  padding: 20px; /* Reduced from 1800px */
   box-sizing: border-box;
-  border-radius: 1px;
-  margin: 20px auto;
-  width: 95%;
+  width: 100%;
 }
 
 .main-content h2 {

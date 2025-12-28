@@ -50,6 +50,16 @@ function Trips() {
             return;
         }
 
+        // Save Search History
+        const username = localStorage.getItem("username");
+        if (username) {
+            axios.post(`${API_BASE}/user/${username}/history`, {
+                origin: o,
+                destination: d,
+                date: depDate
+            }).catch(err => console.error("Failed to save search history", err));
+        }
+
         // --- Fetch Trip Data (Flights + Hotels) ---
         try {
             const res = await axios.get(`${API_BASE}/trip/search`, {
@@ -136,6 +146,7 @@ function Trips() {
                                         <h4>{f.airline} ({f.flightNumber})</h4>
                                         <p><strong>Departure:</strong> {f.departureTime} ({f.departureAirport})</p>
                                         <p><strong>Arrival:</strong> {f.arrivalTime} ({f.arrivalAirport})</p>
+                                        {f.price && <p style={{color: '#2ecc71', fontWeight: 'bold'}}>Price: {f.price}</p>}
                                     </div>
                                 ))}
                             </>

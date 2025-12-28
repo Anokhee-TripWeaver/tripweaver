@@ -95,7 +95,8 @@ export default function DestinationSearch() {
   return (
     <div className="explore-container">
       <Navbar />
-      
+      <div style={{ height: "70px" }}></div>
+
       <div className="main-content">
         <h2>Destination Finder</h2>
 
