@@ -8,15 +8,13 @@
 }
 
 body {
-  height: 100vh;
-  /* Unified full-bleed background for the whole app */
+  min-height: 100vh;
+  width: 100%;
+  margin: 0;
   background-image: url('https://img.freepik.com/free-photo/sunset-time-tropical-beach-sea-with-coconut-palm-tree_74190-1075.jpg?semt=ais_se_enriched&w=740&q=80');
   background-size: cover;
   background-position: center;
   background-attachment: fixed;
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }
 
 .container {
@@ -131,7 +129,15 @@ body {
 }
 /* Animation for toggle */
 .container {
-  transition: all 0.6s ease-in-out;
+  display: flex;
+  background: #fff;
+  width: 950px;
+  height: 550px;
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: 0 15px 30px rgba(0,0,0,0.1);
+  position: relative;
+  /* Removed the transform transition from here to prevent glitching on page load */
 }
 
 .container.active .form-box {

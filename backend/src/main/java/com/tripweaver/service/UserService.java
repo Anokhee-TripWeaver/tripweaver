@@ -3,7 +3,7 @@ package com.tripweaver.service;
 import java.util.Optional;
 
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import com.tripweaver.model.User;
@@ -11,16 +11,19 @@ import com.tripweaver.repository.UserRepository;
 
 @Service
 public class UserService {
+
     @Autowired
     private UserRepository userRepository;
 
     @Autowired
-    private BCryptPasswordEncoder encoder;
+    private PasswordEncoder passwordEncoder;
 
     public String registerUser(User user) {
+
         if (userRepository.findByUsername(user.getUsername()).isPresent()) {
             return "Username already exists!";
         }
+
         if (userRepository.findByEmail(user.getEmail()).isPresent()) {
             return "Email already registered!";
         }
@@ -31,7 +34,7 @@ public class UserService {
         }
 
         // Hash password
-        user.setPassword(encoder.encode(user.getPassword()));
+        user.setPassword(passwordEncoder.encode(user.getPassword()));
 
         userRepository.save(user);
         return "User registered successfully!";

@@ -1,210 +1,275 @@
-/* Container */
+/* =========================
+   GLOBAL PAGE CONTAINER
+   ========================= */
 .explore-container {
   font-family: 'Arial', sans-serif;
   color: #333333;
-  margin: 0;
-  padding: 0;
+
   min-height: 100vh;
   width: 100vw;
+  box-sizing: border-box;
+
+  /* CRITICAL: pushes content below fixed navbar */
+  padding-top: 80px;
+
   display: flex;
   flex-direction: column;
+}
+
+/* =========================
+   GLOBAL NAVBAR
+   ========================= */
+.navbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+
+  width: 100%;
+  height: 80px;              /* SINGLE SOURCE OF TRUTH */
+  padding: 0 36px;           /* horizontal padding only */
+
+  display: flex;
+  align-items: center;
   justify-content: space-between;
+
+  background: linear-gradient(90deg, #c9d2cb, #8a0dad);
+  color: white;
+
+  font-size: 20px;
+  z-index: 2000;
+
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
   box-sizing: border-box;
 }
 
-/* --- NAVBAR STYLES (Used by Navbar.js) --- */
-.navbar {
-  position: fixed; /* make header fixed to the top */
-  left: 0;
-  top: 0;
-  width: 100%; /* span full viewport width */
-  box-sizing: border-box;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px 36px; /* smaller header */
-  min-height: 64px; /* reduced height */
-  background: linear-gradient(90deg, #c9d2cb, #8a0dad);
-  color: white;
-  flex-wrap: wrap;
-  font-size: 20px; /* increased navbar font for readability */
-  z-index: 1000;
-  box-shadow: 0 6px 18px rgba(0,0,0,0.25);
-  transition: all 0.25s;
+/* =========================
+   LOGO
+   ========================= */
+.logo {
+  font-weight: 800;
+  font-size: 24px;
 }
 
 .logo span {
   color: #ffd56a;
-  font-size: 28px; /* smaller logo accent */
+  font-size: 28px;
   font-weight: 800;
 }
 
+/* =========================
+   MENU
+   ========================= */
 .menu {
   list-style: none;
   display: flex;
-  gap: 18px; /* less spacing between items */
-  flex-wrap: wrap;
-  margin-top: 6px;
+  gap: 18px;
+  margin: 0;
+  padding: 0;
 }
 
 .menu li {
   cursor: pointer;
-  padding: 6px 12px; /* reduced padding */
+  padding: 6px 12px;
   border-radius: 8px;
-  transition: all 0.18s;
+
   font-size: 20px;
   font-weight: 700;
+
+  transition: all 0.18s ease;
 }
 
 .menu li:hover {
   color: #ffd56a;
-  background-color: rgba(255,221,87,0.09);
+  background-color: rgba(255, 221, 87, 0.09);
   transform: translateY(-2px);
 }
 
-/* --- HERO SECTION --- */
+/* =========================
+   HERO SECTION
+   ========================= */
 .hero {
   text-align: center;
   padding: 140px 20px;
   flex: 1;
+
   display: flex;
   flex-direction: column;
   justify-content: center;
   align-items: center;
+
   background: linear-gradient(135deg, #f3e6ff, #e6d0ff);
 }
+
 .hero h2 {
-  font-size: 90px; /* bigger hero title */
+  font-size: 90px;
   margin-bottom: 30px;
   color: #ffdd57;
 }
+
 .hero p {
-  font-size: 32px; /* bigger paragraph */
+  font-size: 32px;
   margin-bottom: 40px;
   max-width: 900px;
-  color: #FFDD55;
+  color: #ffdd55;
 }
+
 .get-started {
-  padding: 25px 70px; /* bigger button */
+  padding: 25px 70px;
   background: linear-gradient(90deg, #ffdd57, #7b47ff);
   color: #6a0dad;
+
   border: none;
   border-radius: 45px;
   cursor: pointer;
-  font-size: 28px; /* bigger button text */
+
+  font-size: 28px;
   font-weight: bold;
-  transition: all 0.4s;
-}
-.get-started:hover {
-  transform: scale(1.15);
-  box-shadow: 0 14px 28px rgba(0,0,0,0.3);
+
+  transition: all 0.4s ease;
 }
 
-/* --- SEARCH BAR --- */
+.get-started:hover {
+  transform: scale(1.1);
+  box-shadow: 0 14px 28px rgba(0, 0, 0, 0.3);
+}
+
+/* =========================
+   SEARCH BAR
+   ========================= */
 .search-bar {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 15px;
+
   margin: 45px 20px;
   width: 100%;
 }
+
 .search-bar input,
 .search-bar select {
   padding: 22px;
   width: 95%;
   max-width: 500px;
+
   border-radius: 45px;
   border: 1px solid #ccc;
   outline: none;
-  font-size: 20px; /* bigger input text */
-  transition: all 0.3s;
+
+  font-size: 20px;
+  transition: all 0.3s ease;
 }
+
 .search-bar input:focus,
 .search-bar select:focus {
   border-color: #6a0dad;
-  box-shadow: 0 5px 18px rgba(106,13,173,0.3);
-}
-.search-bar button {
-  padding: 20px 50px; /* bigger search button */
-  border-radius: 45px;
-  border: none;
-  background: linear-gradient(90deg, #0d3aad, #9b30ff);
-  color: white;
-  cursor: pointer;
-  font-size: 22px; /* bigger button text */
-  font-weight: bold;
-  transition: all 0.3s;
-}
-.search-bar button:hover {
-  transform: scale(1.1);
-  box-shadow: 0 10px 22px rgba(0,0,0,0.3);
+  box-shadow: 0 5px 18px rgba(106, 13, 173, 0.3);
 }
 
-/* --- POPULAR PLACES --- */
+.search-bar button {
+  padding: 20px 50px;
+  border-radius: 45px;
+  border: none;
+
+  background: linear-gradient(90deg, #0d3aad, #9b30ff);
+  color: white;
+
+  cursor: pointer;
+  font-size: 22px;
+  font-weight: bold;
+
+  transition: all 0.3s ease;
+}
+
+.search-bar button:hover {
+  transform: scale(1.1);
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.3);
+}
+
+/* =========================
+   POPULAR PLACES
+   ========================= */
 .popular-places {
   text-align: center;
   margin: 55px 20px;
 }
+
 .popular-places h3 {
-  font-size: 42px; /* bigger title */
+  font-size: 42px;
   margin-bottom: 35px;
   color: #6a0dad;
 }
+
 .places-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 35px;
   margin-top: 25px;
 }
+
 .place-card {
   background: #e0c6ff;
   padding: 40px;
   border-radius: 35px;
+
   font-weight: bold;
   cursor: pointer;
-  font-size: 26px; /* bigger text */
-  transition: transform 0.3s, background 0.3s, box-shadow 0.3s;
-}
-.place-card:hover {
-  transform: scale(1.1);
-  background: #d39cff;
-  box-shadow: 0 14px 28px rgba(0,0,0,0.25);
+  font-size: 26px;
+
+  transition: transform 0.3s ease, background 0.3s ease, box-shadow 0.3s ease;
 }
 
-/* --- FOOTER --- */
+.place-card:hover {
+  transform: scale(1.08);
+  background: #d39cff;
+  box-shadow: 0 14px 28px rgba(0, 0, 0, 0.25);
+}
+
+/* =========================
+   FOOTER
+   ========================= */
 footer {
   text-align: center;
   padding: 40px;
+
   color: white;
   background: linear-gradient(90deg, #6a0dad, #9b30ff);
-  font-size: 24px; /* bigger footer text */
+
+  font-size: 24px;
   font-weight: bold;
+
   border-top-left-radius: 25px;
   border-top-right-radius: 25px;
 }
 
-/* --- MEDIA QUERIES --- */
+/* =========================
+   MEDIA QUERIES
+   ========================= */
 @media (min-width: 600px) {
   .search-bar {
     flex-direction: row;
     justify-content: center;
   }
+
   .search-bar input,
   .search-bar select {
     width: auto;
   }
 }
+
 @media (min-width: 768px) {
   .hero h2 {
-    font-size: 100px; /* bigger hero for large screens */
+    font-size: 100px;
   }
+
   .hero p {
     font-size: 36px;
   }
+
   .popular-places h3 {
     font-size: 46px;
   }
+
   .place-card {
     font-size: 28px;
   }
