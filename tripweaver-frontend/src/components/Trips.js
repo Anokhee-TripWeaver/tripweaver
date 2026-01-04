@@ -1,184 +1,174 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import axios from "axios";
 import Navbar from "./navbar";
 import "./Trips.css";
 
-const API_BASE = "http://localhost:8090/api"; // backend URL
+const API_BASE = "http://localhost:8090/api";
 
 function Trips() {
-    const [origin, setOrigin] = useState("");
-    const [destination, setDestination] = useState("");
-    const [startDate, setStartDate] = useState("");
-    const [endDate, setEndDate] = useState("");
-    const [budget, setBudget] = useState("");
+    const [formData, setFormData] = useState({
+        origin: "",
+        destination: "",
+        startDate: "",
+        endDate: "",
+        budget: ""
+    });
     const [trip, setTrip] = useState(null);
     const [error, setError] = useState("");
     const [info, setInfo] = useState("");
     const [loading, setLoading] = useState(false);
 
-    // Mock flights function (remains the same)
+    const handleInputChange = (e) => {
+        setFormData({ ...formData, [e.target.name]: e.target.value });
+    };
+
     const mockFlights = (o, d, dt) => {
         const baseDate = dt || new Date().toISOString().slice(0, 10);
-        const times = ["08:25", "11:10", "15:40", "21:05"];
         const airlines = ["IndiGo", "Air India", "Vistara", "SpiceJet"];
-        return times.map((t, idx) => ({
-            airline: airlines[idx % airlines.length],
-            flightNumber: `${airlines[idx % airlines.length].slice(0, 2).toUpperCase()}${100 + idx}`,
+        return ["08:25", "15:40"].map((t, idx) => ({
+            airline: airlines[idx],
+            flightNumber: `${airlines[idx].slice(0, 2).toUpperCase()}${100 + idx}`,
             departureTime: `${baseDate} ${t}`,
-            arrivalTime: `${baseDate} ${t.split(':')[0]}:00 +${idx < 2 ? 2 : 3}h`, 
+            arrivalTime: `${baseDate} ${parseInt(t) + 3}:00`,
+            departureAirport: o || "ORG",
+            arrivalAirport: d || "DEST"
         }));
     };
 
-    const handleSearch = async () => {
-        setError("");
-        setInfo("");
-        setLoading(true);
-        setTrip(null);
+    const handleSearch = async (e) => {
+        e.preventDefault();
+        const { origin, destination, startDate, endDate, budget } = formData;
 
-        const o = origin.trim().toUpperCase();
-        const d = destination.trim();
-        const depDate = startDate || new Date().toISOString().slice(0, 10);
-        const userBudget = parseFloat(budget);
-        
-        let flights = [];
-        let hotels = [];
-        let fallbackMessages = [];
-
-        if (!o || !d || !startDate || !endDate || !budget) {
-            setError("Please fill in all fields (Origin, Destination, Start Date, End Date, Budget).");
-            setLoading(false);
+        if (!origin || !destination || !startDate || !endDate || !budget) {
+            setError("Please fill in all travel details.");
             return;
         }
 
-        // Save Search History
-        const username = localStorage.getItem("username");
-        if (username) {
-            axios.post(`${API_BASE}/user/${username}/history`, {
-                origin: o,
-                destination: d,
-                date: depDate
-            }).catch(err => console.error("Failed to save search history", err));
-        }
+        setError("");
+        setInfo("");
+        setLoading(true);
 
-        // --- Fetch Trip Data (Flights + Hotels) ---
         try {
             const res = await axios.get(`${API_BASE}/trip/search`, {
-                params: { origin: o, destination: d, date: depDate, budget: userBudget }, 
+                params: {
+                    origin: origin.trim().toUpperCase(),
+                    destination: destination.trim(),
+                    date: startDate,
+                    budget: parseFloat(budget)
+                },
                 withCredentials: true,
             });
-            flights = res.data?.flights || [];
-            hotels = res.data?.hotels || [];
-        } catch (err) {
-            console.error("Trip API Error:", err.response || err.message);
-            // Fallback for flights
-            flights = mockFlights(o, d, depDate);
-            fallbackMessages.push("API Error: Could not fetch complete trip data.");
-        }
 
-        // --- Final State Update ---
-        setTrip({ flights, hotels });
-        
-        if (fallbackMessages.length > 0) {
-            setInfo(fallbackMessages.join(' | ')); 
-        } else if (flights.length === 0 && hotels.length === 0) {
-            setInfo("No results found for your search criteria.");
+            const flights = res.data?.flights || [];
+            const hotels = res.data?.hotels || [];
+
+            if (flights.length === 0 && hotels.length === 0) {
+                setInfo("No results found for your specific budget/dates.");
+            }
+            setTrip({ flights, hotels });
+        } catch (err) {
+            // Fallback for demo/dev purposes
+            setTrip({ flights: mockFlights(origin, destination, startDate), hotels: [] });
+            setInfo("Note: Showing sample flight data (API Offline).");
+        } finally {
+            setLoading(false);
         }
-        
-        setLoading(false);
+    };
+
+    const calculateNights = () => {
+        const start = new Date(formData.startDate);
+        const end = new Date(formData.endDate);
+        const diff = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
+        return diff > 0 ? diff : 1;
     };
 
     return (
-        <div className="trips-wrapper">
+        <div className="trips-page">
             <Navbar />
             <div className="trips-container">
-                <h2>Plan Your Trip</h2>
+                <header className="trips-header">
+                    <h2>Plan Your Trip</h2>
+                    <p>Find the best flights and stays within your budget</p>
+                </header>
 
-                <div className="input-group">
-                    <input
-                        type="text"
-                        placeholder="From (e.g. HYD)"
-                        value={origin}
-                        onChange={(e) => setOrigin(e.target.value)}
-                    />
-                    <input
-                        type="text"
-                        placeholder="To (City e.g. Bangkok, Phuket)"
-                        value={destination}
-                        onChange={(e) => setDestination(e.target.value)}
-                    />
-                    <div style={{display: 'flex', flexDirection: 'column', flex: 1, minWidth: '150px'}}>
-                        <span style={{fontSize: '0.8rem', color: '#666', marginLeft: '5px'}}>Start Date</span>
-                        <input
-                            type="date"
-                            value={startDate}
-                            onChange={(e) => setStartDate(e.target.value)}
-                        />
+                <form className="search-panel" onSubmit={handleSearch}>
+                    <div className="input-row">
+                        <div className="field">
+                            <label>Origin</label>
+                            <input name="origin" type="text" placeholder="e.g. HYD" value={formData.origin} onChange={handleInputChange} />
+                        </div>
+                        <div className="field">
+                            <label>Destination</label>
+                            <input name="destination" type="text" placeholder="e.g. Bangkok" value={formData.destination} onChange={handleInputChange} />
+                        </div>
                     </div>
-                    <div style={{display: 'flex', flexDirection: 'column', flex: 1, minWidth: '150px'}}>
-                        <span style={{fontSize: '0.8rem', color: '#666', marginLeft: '5px'}}>End Date</span>
-                        <input
-                            type="date"
-                            value={endDate}
-                            onChange={(e) => setEndDate(e.target.value)}
-                        />
+                    <div className="input-row">
+                        <div className="field">
+                            <label>Departure</label>
+                            <input name="startDate" type="date" value={formData.startDate} onChange={handleInputChange} />
+                        </div>
+                        <div className="field">
+                            <label>Return</label>
+                            <input name="endDate" type="date" value={formData.endDate} onChange={handleInputChange} />
+                        </div>
+                        <div className="field">
+                            <label>Budget/Night</label>
+                            <input name="budget" type="number" placeholder="₹" value={formData.budget} onChange={handleInputChange} />
+                        </div>
                     </div>
-                    <input
-                        type="number"
-                        placeholder="Max Price/Night ($)"
-                        value={budget}
-                        onChange={(e) => setBudget(e.target.value)}
-                    />
-                    <button onClick={handleSearch} disabled={loading}>
-                        {loading ? "Searching..." : "Search"}
+                    <button type="submit" className="search-btn" disabled={loading}>
+                        {loading ? "Searching..." : "Search Trip"}
                     </button>
-                </div>
+                </form>
 
-                {error && <p className="message error">{error}</p>}
-                {info && <p className="message info">{info}</p>}
+                {error && <div className="msg-box error">{error}</div>}
+                {info && <div className="msg-box info">{info}</div>}
 
-                {trip && (
-                    <div className="results-section">
-                        {trip.flights.length > 0 && (
-                            <>
-                                <h3>Available Flights</h3>
+                <div className="results-layout">
+                    {trip && (
+                        <>
+                            <section className="results-column">
+                                <h3 className="section-title">✈️ Available Flights</h3>
                                 {trip.flights.map((f, i) => (
-                                    <div key={i} className="card">
-                                        <h4>{f.airline} ({f.flightNumber})</h4>
-                                        <p><strong>Departure:</strong> {f.departureTime} ({f.departureAirport})</p>
-                                        <p><strong>Arrival:</strong> {f.arrivalTime} ({f.arrivalAirport})</p>
-                                        {f.price && <p style={{color: '#2ecc71', fontWeight: 'bold'}}>Price: {f.price}</p>}
+                                    <div key={i} className="trip-card flight">
+                                        <div className="card-top">
+                                            <span className="airline-tag">{f.airline}</span>
+                                            <span className="flight-id">{f.flightNumber}</span>
+                                        </div>
+                                        <div className="flight-route">
+                                            <div className="route-point">
+                                                <strong>{f.departureTime.split(' ')[1]}</strong>
+                                                <span>{f.departureAirport}</span>
+                                            </div>
+                                            <div className="route-line">✈️</div>
+                                            <div className="route-point">
+                                                <strong>{f.arrivalTime.split(' ')[1]}</strong>
+                                                <span>{f.arrivalAirport}</span>
+                                            </div>
+                                        </div>
                                     </div>
                                 ))}
-                            </>
-                        )}
+                            </section>
 
-                        {trip.hotels.length > 0 && (
-                            <>
-                                <h3>Available Hotels</h3>
-                                {trip.hotels.map((h, i) => {
-                                    const start = new Date(startDate);
-                                    const end = new Date(endDate);
-                                    const nights = Math.max(1, Math.ceil((end - start) / (1000 * 60 * 60 * 24)) || 1);
-                                    const totalCost = h.price * nights;
-
-                                    return (
-                                        <div key={i} className="card">
-                                            <h4>{h.name}</h4>
-                                            <p>{h.address}</p>
-                                            <p><strong>Rating:</strong> {h.rating} / 5</p>
-                                            <p style={{color: '#2ecc71', fontWeight: 'bold'}}>
-                                                Price: ₹{h.price} / night 
-                                                <span style={{color: '#555', fontSize: '0.9rem', fontWeight: 'normal'}}>
-                                                     (Total: ${totalCost} for {nights} nights)
-                                                </span>
-                                            </p>
+                            <section className="results-column">
+                                <h3 className="section-title">🏨 Recommended Hotels</h3>
+                                {trip.hotels.map((h, i) => (
+                                    <div key={i} className="trip-card hotel">
+                                        <h4>{h.name}</h4>
+                                        <p className="addr">{h.address}</p>
+                                        <div className="hotel-footer">
+                                            <span className="rating">⭐ {h.rating}</span>
+                                            <div className="pricing">
+                                                <span className="price">₹{h.price} / night</span>
+                                                <span className="total">Total: ₹{h.price * calculateNights()}</span>
+                                            </div>
                                         </div>
-                                    );
-                                })}
-                            </>
-                        )}
-                    </div>
-                )}
+                                    </div>
+                                ))}
+                            </section>
+                        </>
+                    )}
+                </div>
             </div>
         </div>
     );
