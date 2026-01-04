@@ -44,30 +44,49 @@ public class AuthController {
     }
 
    @PostMapping("/signin")
-public ResponseEntity<Map<String, String>> signin(@RequestBody Map<String, String> payload) {
-    String username = payload.get("username");
-    String email = payload.get("email");
-    String password = payload.get("password");
+    public ResponseEntity<Map<String, Object>> signin(@RequestBody Map<String, String> payload) {
+        String username = payload.get("username");
+        String email = payload.get("email");
+        String password = payload.get("password");
 
-    if ((username == null || username.isBlank()) && (email == null || email.isBlank())) {
-        return ResponseEntity.badRequest().body(Map.of("message", "Provide username or email"));
-    }
+        if ((username == null || username.isBlank()) && (email == null || email.isBlank())) {
+            return ResponseEntity.badRequest().body(Map.of("message", "Provide username or email"));
+        }
 
-    if ((username == null || username.isBlank()) && email != null) {
-        User byEmail = userService.findByEmail(email).orElse(null);
-        if (byEmail == null) {
+        User user = null;
+
+        if ((username == null || username.isBlank()) && email != null) {
+            user = userService.findByEmail(email).orElse(null);
+            if (user == null) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "Invalid username or password!"));
+            }
+            username = user.getUsername();
+        } else {
+             // Find by username if provided
+             user = userService.findByUsername(username).orElse(null);
+        }
+
+        try {
+            authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(username, password)
+            );
+            
+            // Refetch user if null (though if authentication passed, it should exist, but good to be safe)
+            if (user == null) {
+                 user = userService.findByUsername(username).orElse(null);
+            }
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("message", "Login successful");
+            if (user != null) {
+                response.put("username", user.getUsername());
+                response.put("email", user.getEmail());
+                response.put("role", user.getRole());
+            }
+            
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "Invalid username or password!"));
         }
-        username = byEmail.getUsername();
     }
-
-    try {
-        authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(username, password)
-        );
-        return ResponseEntity.ok(Map.of("message", "Login successful"));
-    } catch (Exception e) {
-        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "Invalid username or password!"));
-    }
-}
 }

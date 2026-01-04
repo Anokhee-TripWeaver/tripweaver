@@ -8,20 +8,30 @@
 }
 
 body {
-  height: 100vh;
+  min-height: 100vh;
   /* Unified full-bleed background for the whole app */
-  background-image: url('https://img.freepik.com/free-photo/sunset-time-tropical-beach-sea-with-coconut-palm-tree_74190-1075.jpg?semt=ais_se_enriched&w=740&q=80');
+  background-image: url('./assets/unnamed.jpg');
   background-size: cover;
   background-position: center;
   background-attachment: fixed;
+  /* Allow scrolling for long content */
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+/* Wrapper for Auth Pages to center the card */
+.auth-wrapper {
+  min-height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: 20px;
 }
 
 .container {
   display: flex;
-  background: #fff;
+  background: rgba(255, 255, 255, 0.85); /* Semi-transparent white */
+  backdrop-filter: blur(10px); /* Glassmorphism */
   width: 950px;
   height: 550px;
   border-radius: 20px;
@@ -98,8 +108,57 @@ body {
   justify-content: center;
   align-items: center;
   text-align: center;
-  padding: 50px;
 }
+
+/* ---------- Signin / Signup Pages ---------- */
+/* Reset these to fit inside the .container form-box */
+.signin-page, .signup-page {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  background: transparent; 
+}
+
+.signin-card, .signup-card {
+  background: transparent;
+  box-shadow: none;
+  padding: 0;
+  width: 100%;
+  text-align: center;
+}
+
+.signin-title, .signup-title {
+  font-size: 2rem;
+  font-weight: 600;
+  margin-bottom: 10px;
+  color: #333;
+}
+
+.signin-subtitle, .signup-subtitle {
+  color: #666;
+  margin-bottom: 30px;
+}
+
+.error-box {
+  background: #ffebee;
+  color: #c62828;
+  padding: 10px;
+  border-radius: 5px;
+  margin-bottom: 20px;
+  font-size: 0.9rem;
+}
+
+.success-box {
+  background: #e8f5e9;
+  color: #2e7d32;
+  padding: 10px;
+  border-radius: 5px;
+  margin-bottom: 20px;
+  font-size: 0.9rem;
+}
+
 
 .info-box h2 {
   font-size: 30px;

@@ -101,7 +101,6 @@ export default function Signin() {
                 color: "#7b68ee"
               }}
             ></i>
-
             {/* Input field */}
             <input
               type={showPassword ? "text" : "password"}
@@ -111,35 +110,62 @@ export default function Signin() {
               onChange={handleChange}
               style={{
                 width: "100%",
-                padding: "12px 45px 12px 40px", // left padding for lock, right padding for eye
+                padding: "12px 40px 12px 40px", // space for both icons
                 fontSize: "1rem",
                 borderRadius: "8px",
                 border: "1px solid #ccc",
                 boxSizing: "border-box"
               }}
             />
-
-            {/* Eye toggle */}
+            {/* Eye Icon */}
             <i
-              className={`bx ${showPassword ? "bxs-show" : "bxs-hide"}`}
+              className={`bx ${showPassword ? "bx-show" : "bx-hide"}`}
               onClick={() => setShowPassword(!showPassword)}
               style={{
                 position: "absolute",
                 right: "10px",
                 top: "50%",
                 transform: "translateY(-50%)",
-                fontSize: "1.8rem",
+                fontSize: "1.5rem",
                 color: "#7b68ee",
                 cursor: "pointer"
               }}
             ></i>
           </div>
 
-
-          {/* LOGIN BUTTON */}
-          <button className="btn" disabled={loading}>
-            {loading ? "Signing in..." : "Login"}
+          <button type="submit" className="btn" disabled={loading}>
+            {loading ? "Logging in..." : "Login"}
           </button>
+
+          <div style={{ marginTop: "15px", textAlign: "center" }}>
+            <p style={{ margin: "10px 0", color: "#666" }}>OR</p>
+            <button
+              type="button"
+              className="google-btn"
+              style={{
+                width: "100%",
+                padding: "10px",
+                borderRadius: "8px",
+                border: "1px solid #ddd",
+                background: "#fff",
+                color: "#333",
+                fontSize: "1rem",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "10px",
+                transition: "background 0.3s"
+              }}
+              onClick={() => alert("Google Login coming soon!")}
+              onMouseOver={(e) => (e.currentTarget.style.background = "#f5f5f5")}
+              onMouseOut={(e) => (e.currentTarget.style.background = "#fff")}
+            >
+              <i className='bx bxl-google' style={{ fontSize: "1.5rem", color: "#DB4437" }}></i>
+              Continue with Google
+            </button>
+          </div>
+
         </form>
       </div>
     </div>
