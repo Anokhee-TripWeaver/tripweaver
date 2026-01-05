@@ -2,15 +2,16 @@ import React, { useState } from "react";
 import axios from "axios";
 import "boxicons/css/boxicons.min.css";
 
+
 function Signup() {
   const [formData, setFormData] = useState({
     username: "",
     email: "",
     password: "",
-    role: "USER"   // default role
+    role: "USER"   // ✅ default role
   });
+  const API_BASE = "http://localhost:8090/api"; // just the backend base URL
 
-  const API_BASE = "http://localhost:8090/api";
 
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -44,7 +45,6 @@ function Signup() {
     return true;
   };
 
-  // ✅ MANUAL SIGNUP
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -67,12 +67,6 @@ function Signup() {
     } finally {
       setLoading(false);
     }
-  };
-
-  // ✅ GOOGLE SIGNUP / LOGIN
-  const googleSignup = () => {
-    window.location.href =
-      "http://localhost:8090/oauth2/authorization/google";
   };
 
   return (
@@ -124,20 +118,6 @@ function Signup() {
             {loading ? "Registering..." : "Register"}
           </button>
         </form>
-
-        {/* 🔹 Divider */}
-        <p style={{ margin: "15px 0", color: "#666", textAlign: "center" }}>
-          OR
-        </p>
-
-        {/* ✅ GOOGLE SIGNUP BUTTON */}
-        <button className="google-btn" onClick={googleSignup}>
-          <img
-            src="https://developers.google.com/identity/images/g-logo.png"
-            alt="Google"
-          />
-          Continue with Google
-        </button>
       </div>
     </div>
   );

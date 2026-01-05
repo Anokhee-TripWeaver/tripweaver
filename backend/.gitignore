@@ -31,3 +31,12 @@ build/
 
 ### VS Code ###
 .vscode/
+
+# Eclipse / IDE files
+.metadata/
+backend/.metadata/
+.idea/
+.vscode/
+
+# OS files
+.DS_Store
