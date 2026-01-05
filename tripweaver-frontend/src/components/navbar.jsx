@@ -1,25 +1,32 @@
-import React, { useState } from "react";
+import React from "react";
 import { useNavigate } from "react-router-dom";
 import "./navbar.css";
+
 export default function Navbar() {
   const navigate = useNavigate();
-  const [showProfile, setShowProfile] = useState(false);
 
-  // Retrieve user data from localStorage
+  // 🔹 Manual login
   const username = localStorage.getItem("username");
-  const email = localStorage.getItem("email");
-  const role = localStorage.getItem("role");
-  const isLoggedIn = !!username;
 
-  // Navigation handlers
-  const goToSignin = () => navigate("/signup"); 
-  const goToSearch = () => (isLoggedIn ? navigate("/search") : navigate("/signup"));
-  const goToPlanner = () => (isLoggedIn ? navigate("/planner") : navigate("/signup"));
-  
+  // 🔹 Google login
+  const googleUser = JSON.parse(localStorage.getItem("user"));
+
+  // 🔹 Logged-in check (FIXED)
+  const isLoggedIn = !!username || !!googleUser;
+
+  // 🔹 Display name
+  const displayName = googleUser?.name || username;
+
+  // 🔹 Navigation handlers (NO BLOCKING)
+  const goToSearch = () => navigate("/search");
+  const goToPlanner = () => navigate("/planner");
+  const goToTrips = () => navigate("/trips");
+  const goToBookings = () => navigate("/bookings");
+
+  const goToAuth = () => navigate("/signup");
+
   const logout = () => {
-    localStorage.removeItem("username");
-    localStorage.removeItem("email");
-    localStorage.removeItem("role");
+    localStorage.clear();
     navigate("/signup");
   };
 
@@ -32,17 +39,17 @@ export default function Navbar() {
       <ul className="menu">
         <li onClick={goToSearch}>Destinations</li>
         <li onClick={goToPlanner}>Itinerary Planner</li>
-        <li onClick={() => navigate("/trips")}>Trips</li>
-        <li onClick={goToSearch}>Bookings</li>
+        <li onClick={goToTrips}>Trips</li>
+        <li onClick={goToBookings}>Bookings</li>
 
         {!isLoggedIn ? (
-          <li onClick={goToSignin}>Login / Signup</li>
+          <li onClick={goToAuth}>Login / Signup</li>
         ) : (
           <>
-            <li onClick={() => navigate("/profile")} style={{ cursor: "pointer" }}>
-              👤 {username}
+            <li onClick={() => navigate("/profile")}>
+              👤 {displayName}
             </li>
-            <li onClick={logout} style={{ color: "red", cursor: "pointer" }}>
+            <li onClick={logout} style={{ color: "red" }}>
               Logout
             </li>
           </>

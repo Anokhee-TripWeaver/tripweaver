@@ -34,11 +34,30 @@ public class SecurityConfig {
             .cors(Customizer.withDefaults())
             .csrf(AbstractHttpConfigurer::disable)
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/api/auth/**", "/api/trip/**", "/api/destination/**", "/api/openai/**", "/api/gemini/**", "/api/photo-legacy").permitAll()
+                // ✅ allow auth + google oauth
+                .requestMatchers(
+                    "/api/auth/**",
+                    "/api/trip/**",
+                    "/api/destination/**",
+                    "/api/openai/**",
+                    "/api/gemini/**",
+                    "/api/photo-legacy",
+                    "/oauth2/**",
+                    "/login/**"
+                ).permitAll()
                 .anyRequest().authenticated()
+            )
+            // ✅ ENABLE GOOGLE LOGIN
+            .oauth2Login(oauth -> oauth
+                .defaultSuccessUrl(
+                    "http://localhost:3000/oauth-success",
+                    true
+                )
             );
+
         return http.build();
     }
+
 
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
