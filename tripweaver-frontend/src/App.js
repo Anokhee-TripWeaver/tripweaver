@@ -8,10 +8,8 @@ import Explore from "./components/Explore";
 import Trips from "./components/Trips";
 import ItineraryPlanner from "./components/ItineraryPlanner";
 import UserProfile from "./components/UserProfile";
-import OAuthSuccess from "./components/OAuthSuccess";
 import "./App.css";
 import "boxicons/css/boxicons.min.css";
-
 
 function App() {
   const [isSignup, setIsSignup] = useState(false);
@@ -79,7 +77,6 @@ function App() {
         {/* REDIRECT any unknown route */}
         <Route path="*" element={<Navigate to="/signup" />} />
 
-        <Route path="/oauth-success" element={<OAuthSuccess />} />
       </Routes>
     </Router>
   );

@@ -204,39 +204,3 @@ body {
 .form-box, .info-box {
   transition: all 0.6s ease-in-out;
 }
-
-/* ============================= */
-/* Google Login Button Override  */
-/* ============================= */
-
-.google-btn {
-  width: 100%;
-  padding: 12px;
-  margin-top: 12px;
-
-  background-color: #ffffff !important; /* force remove purple */
-  color: #3c4043 !important;
-
-  border: 1px solid #dadce0;
-  border-radius: 8px;
-
-  font-size: 16px;
-  font-weight: 500;
-
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-
-  cursor: pointer;
-  transition: background-color 0.3s ease;
-}
-
-.google-btn:hover {
-  background-color: #f7f8f8 !important;
-}
-
-.google-btn img {
-  width: 18px;
-  height: 18px;
-}
