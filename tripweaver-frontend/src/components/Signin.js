@@ -35,7 +35,11 @@ export default function Signin() {
         headers: { "Content-Type": "application/json" }
       });
 
-      localStorage.setItem("username", formData.username);
+      sessionStorage.setItem("username", formData.username);
+      // If the backend sends other details like email/role, store them too if needed
+      // sessionStorage.setItem("email", ...); 
+      // sessionStorage.setItem("role", ...);
+
       navigate("/");
     } catch (err) {
       const msg =
