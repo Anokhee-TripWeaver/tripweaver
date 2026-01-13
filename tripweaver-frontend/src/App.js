@@ -8,6 +8,8 @@ import Explore from "./components/Explore";
 import Trips from "./components/Trips";
 import ItineraryPlanner from "./components/ItineraryPlanner";
 import UserProfile from "./components/UserProfile";
+import Wishlist from "./components/Wishlist";
+import Cart from "./components/Cart";
 import "./App.css";
 import "boxicons/css/boxicons.min.css";
 
@@ -73,6 +75,12 @@ function App() {
 
         {/* USER PROFILE */}
         <Route path="/profile" element={<UserProfile />} />
+
+        {/* WISHLIST */}
+        <Route path="/wishlist" element={<Wishlist />} />
+
+        {/* CART */}
+        <Route path="/cart" element={<Cart />} />
 
         {/* REDIRECT any unknown route */}
         <Route path="*" element={<Navigate to="/signup" />} />

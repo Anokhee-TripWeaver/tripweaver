@@ -1,14 +1,16 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { FaHeart, FaShoppingCart } from "react-icons/fa";
 import "./navbar.css";
+
 export default function Navbar() {
   const navigate = useNavigate();
   const [showProfile, setShowProfile] = useState(false);
 
-  // Retrieve user data from localStorage
-  const username = localStorage.getItem("username");
-  const email = localStorage.getItem("email");
-  const role = localStorage.getItem("role");
+  // Retrieve user data from sessionStorage (Session-based auth)
+  const username = sessionStorage.getItem("username");
+  const email = sessionStorage.getItem("email");
+  const role = sessionStorage.getItem("role");
   const isLoggedIn = !!username;
 
   // Navigation handlers
@@ -17,9 +19,9 @@ export default function Navbar() {
   const goToPlanner = () => (isLoggedIn ? navigate("/planner") : navigate("/signup"));
   
   const logout = () => {
-    localStorage.removeItem("username");
-    localStorage.removeItem("email");
-    localStorage.removeItem("role");
+    sessionStorage.removeItem("username");
+    sessionStorage.removeItem("email");
+    sessionStorage.removeItem("role");
     navigate("/signup");
   };
 
@@ -34,6 +36,17 @@ export default function Navbar() {
         <li onClick={goToPlanner}>Itinerary Planner</li>
         <li onClick={() => navigate("/trips")}>Trips</li>
         <li onClick={goToSearch}>Bookings</li>
+
+        {isLoggedIn && (
+          <>
+            <li onClick={() => navigate("/wishlist")} title="Wishlist" style={{ fontSize: '1.2rem', display: 'flex', alignItems: 'center' }}>
+              <FaHeart />
+            </li>
+            <li onClick={() => navigate("/cart")} title="Cart" style={{ fontSize: '1.2rem', display: 'flex', alignItems: 'center' }}>
+              <FaShoppingCart />
+            </li>
+          </>
+        )}
 
         {!isLoggedIn ? (
           <li onClick={goToSignin}>Login / Signup</li>
