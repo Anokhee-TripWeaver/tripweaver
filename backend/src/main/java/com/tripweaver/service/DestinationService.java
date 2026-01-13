@@ -58,24 +58,32 @@ public class DestinationService {
                 String placeId = r.optString("place_id", "");
 
                 String photoUrl = null;
+                List<String> photoUrls = new ArrayList<>();
                 JSONArray photos = r.optJSONArray("photos");
                 if (photos != null && photos.length() > 0) {
-                    JSONObject ph = photos.optJSONObject(0);
-                    String photoRef = ph != null ? ph.optString("photo_reference", null) : null;
-                    if (photoRef != null) {
-                        photoUrl = "https://maps.googleapis.com/maps/api/place/photo?"
-                                + "maxwidth=800&photoreference=" + URLEncoder.encode(photoRef, StandardCharsets.UTF_8)
-                                + "&key=" + googleApiKey;
+                    // Get up to 5 photos
+                    for (int k = 0; k < Math.min(photos.length(), 5); k++) {
+                        JSONObject ph = photos.optJSONObject(k);
+                        String photoRef = ph != null ? ph.optString("photo_reference", null) : null;
+                        if (photoRef != null) {
+                            String pUrl = "https://maps.googleapis.com/maps/api/place/photo?"
+                                    + "maxwidth=800&photoreference=" + URLEncoder.encode(photoRef, StandardCharsets.UTF_8)
+                                    + "&key=" + googleApiKey;
+                            photoUrls.add(pUrl);
+                            if (k == 0) photoUrl = pUrl;
+                        }
                     }
                 }
 
                 if (photoUrl == null) {
                     photoUrl = "https://source.unsplash.com/800x400/?"
                             + URLEncoder.encode(name + "," + category, StandardCharsets.UTF_8);
+                    photoUrls.add(photoUrl);
                 }
 
                 Destination d = new Destination(name, address, lat, lon, category != null ? category : "", placeId);
                 d.setPhotoUrl(photoUrl);
+                d.setPhotoUrls(photoUrls);
 
                 if (r.has("rating")) d.setRating(r.optDouble("rating"));
                 if (r.has("user_ratings_total")) d.setUserRatingCount(r.optInt("user_ratings_total"));

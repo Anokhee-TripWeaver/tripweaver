@@ -10,7 +10,7 @@ export default function UserProfile() {
     const [formData, setFormData] = useState({ username: '', email: '' });
     const [message, setMessage] = useState('');
 
-    const username = localStorage.getItem('username');
+    const username = sessionStorage.getItem('username');
 
     useEffect(() => {
         if (!username) return;

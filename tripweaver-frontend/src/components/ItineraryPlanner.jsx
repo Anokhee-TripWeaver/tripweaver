@@ -4,41 +4,23 @@ import { generateItinerary } from "../services/api";
 import "./ItineraryPlanner.css";
 
 export default function ItineraryPlanner() {
-  const [formData, setFormData] = useState({
-    destination: "",
-    startDate: "",
-    endDate: "",
-  });
+  const [formData, setFormData] = useState({ destination: "", startDate: "", endDate: "" });
   const [itinerary, setItinerary] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
-  };
+  const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError("");
-    setItinerary("");
-
-    // Date Validation
-    const start = new Date(formData.startDate);
-    const end = new Date(formData.endDate);
-
-    if (end < start) {
-      setError("End Date cannot be before Start Date!");
-      setLoading(false);
-      return;
-    }
-
+    setItinerary(""); // Clear previous results
     try {
       const response = await generateItinerary(formData);
       setItinerary(response.data);
     } catch (err) {
       setError("Failed to generate itinerary. Please try again.");
-      console.error(err);
     } finally {
       setLoading(false);
     }
@@ -46,84 +28,73 @@ export default function ItineraryPlanner() {
 
   const parsedDays = useMemo(() => {
     if (!itinerary) return [];
-    const lines = itinerary.split("\n");
-    const days = [];
-    let current = null;
-    for (const raw of lines) {
-      const line = raw.trim();
-      if (!line) continue;
-      if (line.startsWith("Day ")) {
-        if (current) days.push(current);
-        current = { title: line, items: [] };
-      } else {
-        if (!current) current = { title: "Itinerary", items: [] };
-        current.items.push(line.replace(/^•\s*/, "• "));
-      }
-    }
-    if (current) days.push(current);
-    return days;
+    const sections = itinerary.split(/(?=Day \d+)/); 
+    return sections.map(section => {
+      const lines = section.trim().split("\n");
+      return {
+        title: lines[0], 
+        activities: lines.slice(1).filter(line => line.trim() !== "")
+      };
+    }).filter(day => day.title);
   }, [itinerary]);
 
   return (
-    <>
+    <div className="planner-wrapper">
       <Navbar />
-      <div className="planner-wrapper">
-        <div className="planner-panel">
-          <h2>Itinerary Planner</h2>
-          <form className="planner-form" onSubmit={handleSubmit}>
-            <div className="form-group">
-              <label>Destination</label>
-              <input
-                type="text"
-                name="destination"
-                value={formData.destination}
-                onChange={handleChange}
-                required
-                placeholder="e.g. Paris, Tokyo"
-              />
-            </div>
-            <div className="form-group">
-              <label>Start Date</label>
-              <input
-                type="date"
-                name="startDate"
-                value={formData.startDate}
-                onChange={handleChange}
-                required
-              />
-            </div>
-            <div className="form-group">
-              <label>End Date</label>
-              <input
-                type="date"
-                name="endDate"
-                value={formData.endDate}
-                onChange={handleChange}
-                required
-              />
-            </div>
-            <button type="submit" disabled={loading}>
-              {loading ? "Generating..." : "Generate Itinerary"}
-            </button>
-          </form>
-          {error && <p className="error-msg">{error}</p>}
-        </div>
+      <main className="itinerary-page">
+        <header className="page-header">
+          <h1>Trip Weaver</h1>
+          <p>Your personalized time-based travel guide</p>
+        </header>
 
-        {!!parsedDays.length && (
-          <div className="day-grid">
+        <section className="planner-card">
+          <form onSubmit={handleSubmit} className="planner-form">
+            <div className="field">
+              <label>Destination</label>
+              <input 
+                type="text" 
+                name="destination" 
+                placeholder="e.g. Paris, France"
+                value={formData.destination} 
+                onChange={handleChange} 
+                required 
+              />
+            </div>
+            <div className="field-row">
+              <div className="field">
+                <label>Start Date</label>
+                <input type="date" name="startDate" value={formData.startDate} onChange={handleChange} required />
+              </div>
+              <div className="field">
+                <label>End Date</label>
+                <input type="date" name="endDate" value={formData.endDate} onChange={handleChange} required />
+              </div>
+            </div>
+            <button className="btn-primary" disabled={loading}>
+              {loading ? "Crafting your trip..." : "Generate Itinerary"}
+            </button>
+            {error && <p className="form-error">{error}</p>}
+          </form>
+        </section>
+
+        {parsedDays.length > 0 && (
+          <div className="results-section">
             {parsedDays.map((day, idx) => (
               <div key={idx} className="day-card">
-                <h3>{day.title}</h3>
-                <ul>
-                  {day.items.map((item, i) => (
-                    <li key={i}>{item}</li>
+                <h2 className="day-title">{day.title}</h2>
+                <div className="timeline">
+                  {day.activities.map((act, i) => (
+                    <div key={i} className={`timeline-item ${act.includes("Cost") ? "cost-highlight" : ""}`}>
+                      {!act.includes("Cost") && <span className="dot"></span>}
+                      <p>{act}</p>
+                    </div>
                   ))}
-                </ul>
+                </div>
               </div>
             ))}
           </div>
         )}
-      </div>
-    </>
+      </main>
+    </div>
   );
 }
