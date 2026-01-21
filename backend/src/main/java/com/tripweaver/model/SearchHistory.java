@@ -2,7 +2,6 @@ package com.tripweaver.model;
 
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
-import com.fasterxml.jackson.annotation.JsonIgnore;
 
 @Entity
 @Table(name = "search_history")
@@ -12,41 +11,41 @@ public class SearchHistory {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    private String origin;
-    private String destination;
-    private String travelDate;
-    private LocalDateTime searchTimestamp;
+    @Column(nullable = false)
+    private String email;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id")
-    @JsonIgnore
-    private User user;
+    @Column(nullable = false, length = 500)
+    private String query;
+
+    @Column(nullable = false)
+    private String category;
+
+    @Column(nullable = false)
+    private String type;
+
+    @Column(name = "searched_at")
+    private LocalDateTime searchedAt;
 
     public SearchHistory() {}
 
-    public SearchHistory(String origin, String destination, String travelDate, User user) {
-        this.origin = origin;
-        this.destination = destination;
-        this.travelDate = travelDate;
-        this.user = user;
-        this.searchTimestamp = LocalDateTime.now();
+    @PrePersist
+    protected void onCreate() {
+        this.searchedAt = LocalDateTime.now();
     }
 
     public Long getId() { return id; }
-    public void setId(Long id) { this.id = id; }
 
-    public String getOrigin() { return origin; }
-    public void setOrigin(String origin) { this.origin = origin; }
+    public String getEmail() { return email; }
+    public void setEmail(String email) { this.email = email; }
 
-    public String getDestination() { return destination; }
-    public void setDestination(String destination) { this.destination = destination; }
+    public String getQuery() { return query; }
+    public void setQuery(String query) { this.query = query; }
 
-    public String getTravelDate() { return travelDate; }
-    public void setTravelDate(String travelDate) { this.travelDate = travelDate; }
+    public String getCategory() { return category; }
+    public void setCategory(String category) { this.category = category; }
 
-    public LocalDateTime getSearchTimestamp() { return searchTimestamp; }
-    public void setSearchTimestamp(LocalDateTime searchTimestamp) { this.searchTimestamp = searchTimestamp; }
+    public String getType() { return type; }
+    public void setType(String type) { this.type = type; }
 
-    public User getUser() { return user; }
-    public void setUser(User user) { this.user = user; }
+    public LocalDateTime getSearchedAt() { return searchedAt; }
 }

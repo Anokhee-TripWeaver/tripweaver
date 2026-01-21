@@ -10,6 +10,7 @@ public class Destination {
     private String placeId;
     private String photoReference;
     private String photoUrl;
+    private java.util.List<String> photoUrls;
     private Double rating;
     private Integer userRatingCount;
 
@@ -50,6 +51,7 @@ public class Destination {
     public String getPlaceId() { return placeId; }
     public String getPhotoReference() { return photoReference; }
     public String getPhotoUrl() { return photoUrl; }
+    public java.util.List<String> getPhotoUrls() { return photoUrls; }
     public Double getRating() { return rating; }
     public Integer getUserRatingCount() { return userRatingCount; }
 
@@ -62,6 +64,7 @@ public class Destination {
     public void setPlaceId(String placeId) { this.placeId = placeId; }
     public void setPhotoReference(String photoReference) { this.photoReference = photoReference; }
     public void setPhotoUrl(String photoUrl) { this.photoUrl = photoUrl; }
+    public void setPhotoUrls(java.util.List<String> photoUrls) { this.photoUrls = photoUrls; }
     public void setRating(Double rating) { this.rating = rating; }
     public void setUserRatingCount(Integer userRatingCount) { this.userRatingCount = userRatingCount; }
 

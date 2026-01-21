@@ -8,6 +8,7 @@ public class Flight {
     private String departureTime;
     private String arrivalTime;
     private String price;
+    private int stops;
 
     // Getters & Setters
     public String getAirline() { return airline; }
@@ -24,4 +25,6 @@ public class Flight {
     public void setArrivalTime(String arrivalTime) { this.arrivalTime = arrivalTime; }
     public String getPrice() { return price; }
     public void setPrice(String price) { this.price = price; }
+    public int getStops() { return stops; }
+    public void setStops(int stops) { this.stops = stops; }
 }

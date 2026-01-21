@@ -1,113 +1,124 @@
+/* ===============================
+   ITINERARY PLANNER PAGE
+================================ */
+:root {
+  --primary: #4834d4;
+  --text-main: #2d3436;
+  --text-muted: #636e72;
+  --bg-soft: #f8fafa;
+  --radius: 12px;
+  --border: #dfe6e9;
+}
+
 .planner-wrapper {
-  min-height: calc(100vh - 70px);
-  padding: 40px 20px;
+  /* This ensures the content starts AFTER the navbar */
+  padding-top: 80px; 
+  min-height: 100vh;
+  background: 
+    linear-gradient(rgba(248, 250, 252, 0.8), rgba(248, 250, 252, 0.9)),
+    url("https://c8.alamy.com/comp/2CNHEE4/planning-vacation-travel-plan-trip-vacation-using-world-map-along-with-other-travel-accessories-top-view-flat-lay-2CNHEE4.jpg");
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;
+}
+
+.itinerary-page {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 20px 16px 100px;
+}
+
+/* Reusable Card Style */
+.page-header, .planner-card, .day-card {
+  background: #ffffff;
+  border-radius: var(--radius);
+  padding: 30px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.05);
+  margin-bottom: 30px;
+}
+
+/* Header */
+.page-header h1 {
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: var(--text-main);
+  margin: 0;
+}
+
+.page-header p {
+  color: var(--text-muted);
+  margin: 8px 0 0;
+}
+
+/* Form Styles */
+.planner-form {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 24px;
+  gap: 20px;
 }
 
-.planner-panel {
-  width: 100%;
-  max-width: 520px;
-  backdrop-filter: blur(6px);
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.25);
-  color: #fff;
-  padding: 24px;
-  border-radius: 14px;
-  box-shadow: 0 10px 24px rgba(0,0,0,0.25);
-  text-align: center;
+.field-row {
+  display: flex;
+  gap: 16px;
 }
 
-.planner-panel h2 {
-  margin-bottom: 12px;
-}
-
-.form-group {
-  margin-bottom: 12px;
-  text-align: left;
-}
-
-.form-group label {
+.field label {
   display: block;
-  margin-bottom: 6px;
-  font-weight: bold;
-  color: #f1f1f1;
+  font-size: 0.9rem;
+  font-weight: 600;
+  margin-bottom: 8px;
 }
 
-.form-group input {
-  width: 100%;
-  padding: 10px;
-  border: 1px solid rgba(255,255,255,0.4);
-  border-radius: 8px;
-  font-size: 16px;
-  background: rgba(255,255,255,0.85);
-  color: #222;
-}
-
-button {
+.field input {
   width: 100%;
   padding: 12px;
-  background: linear-gradient(135deg, #1b9cff, #007bff);
-  color: white;
-  border: none;
-  border-radius: 10px;
-  font-size: 16px;
-  cursor: pointer;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 1rem;
 }
 
-button:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 8px 18px rgba(0,0,0,0.25);
-}
-
-button:disabled {
-  background-color: #ccc;
-  cursor: not-allowed;
-}
-
-.error-msg {
-  color: red;
-  margin-top: 10px;
-}
-
-.day-grid {
-  width: 100%;
-  max-width: 1100px;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 18px;
-  padding-bottom: 40px;
-}
-
-.day-card {
-  background: rgba(255,255,255,0.95);
-  border-radius: 14px;
-  box-shadow: 0 8px 18px rgba(0,0,0,0.15);
-  padding: 18px;
-  color: #222;
-}
-
-.day-card h3 {
+/* Timeline UI */
+.day-title {
+  color: var(--primary);
+  font-size: 1.4rem;
   margin-top: 0;
-  margin-bottom: 10px;
-  color: #1b1b1b;
+  border-bottom: 2px solid var(--bg-soft);
+  padding-bottom: 10px;
 }
 
-.day-card ul {
-  list-style: none;
-  margin: 0;
-  padding: 0;
+.timeline {
+  border-left: 2px dashed var(--border);
+  margin-left: 10px;
+  padding-left: 30px;
+  position: relative;
 }
 
-.day-card li {
-  padding: 6px 0;
-  border-bottom: 1px dashed #e2e2e2;
+.timeline-item {
+  position: relative;
+  margin-bottom: 20px;
 }
 
-.day-card li:last-child {
-  border-bottom: none;
+.dot {
+  position: absolute;
+  left: -37px;
+  top: 6px;
+  width: 12px;
+  height: 12px;
+  background: var(--primary);
+  border-radius: 50%;
+  border: 2px solid white;
+}
+
+.cost-highlight {
+  background: #f1fcf4;
+  padding: 12px;
+  border-radius: 8px;
+  border-left: 4px solid #27ae60;
+  font-weight: 600;
+  color: #1e6b3e;
+}
+
+@media (max-width: 600px) {
+  .field-row { flex-direction: column; }
+  .page-header h1 { font-size: 1.8rem; }
 }

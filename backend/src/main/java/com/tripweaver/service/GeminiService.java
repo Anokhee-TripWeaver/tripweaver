@@ -3,22 +3,9 @@ package com.tripweaver.service;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
+import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
-
-import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
-import java.time.temporal.ChronoUnit;
-import java.util.Comparator;
-import java.util.List;
-import java.util.stream.Collectors;
-
-import com.tripweaver.model.Destination;
 
 @Service
 public class GeminiService {
@@ -28,171 +15,75 @@ public class GeminiService {
 
     private final RestTemplate restTemplate = new RestTemplate();
 
-    @Autowired
-    private DestinationService destinationService;
-
     public String generateItinerary(String destination, String startDate, String endDate) {
-        // Calculate number of days
-        long days = 1;
-        try {
-            LocalDate start = LocalDate.parse(startDate);
-            LocalDate end = LocalDate.parse(endDate);
-            days = ChronoUnit.DAYS.between(start, end) + 1;
-        } catch (Exception e) {
-            // Fallback if parsing fails
-            days = 5; 
-        }
+        String cleanKey = apiKey.trim().replace("\"", "").replace("'", "");
 
+        // 1. Build a High-Detail Prompt
         String prompt = String.format(
-            "Create a highly detailed, time-based travel itinerary for a trip to %s from %s to %s (%d days). " +
-            "Strictly follow this format for EACH day:\n\n" +
-            "Day X (YYYY-MM-DD)\n" +
-            "- Morning:\n" +
-            "  • 07:00 AM: Start your day [Mention specific transport mode to first location]\n" +
-            "  • 09:00 AM: [Attraction name] - [Brief description]\n" +
-            "  • 11:00 AM: [Next Stop] (Transport: [e.g. Walk 10 mins / Take Metro Line 1])\n" +
-            "- Afternoon:\n" +
-            "  • 01:00 PM: Lunch at [Restaurant Name] (Cuisine: [Type])\n" +
-            "  • 03:00 PM: [Activity] (Transport: [Details])\n" +
-            "- Evening:\n" +
-            "  • 07:00 PM: Dinner at [Restaurant Name]\n" +
-            "  • 09:00 PM: [Optional Night Activity or Return to Hotel]\n" +
-            "- Tips: [Specific local advice, e.g., 'Buy a 24h metro pass']\n\n" +
-            "Ensure you generate a plan for EVERY single day from %s to %s. Do not skip any days.",
-            destination, startDate, endDate, days, startDate, endDate
+            "You are a professional travel planner. Generate a highly detailed, luxury-grade travel itinerary for %s from %s to %s. " +
+            "For EACH day, follow this exact structure and include a dashed line separator (---) at the end of each day:\n\n" +
+            "DAY X (YYYY-MM-DD)\n" +
+            "Morning (08:00 AM - 12:00 PM): Provide 3-4 sentences on specific historical landmarks or hidden gems. Mention specific entry gates or local secrets.\n" +
+            "Lunch (01:00 PM): Mention a specific, highly-rated local restaurant and one signature dish to try.\n" +
+            "Afternoon (02:30 PM - 06:00 PM): Plan a high-activity or scenic spot with local transport tips.\n" +
+            "Dinner (07:30 PM): Suggest a fine dining or unique atmospheric restaurant with price indicators.\n" +
+            "Evening: Suggest a night-walk, a rooftop bar, or a cultural performance.\n" +
+            "Logistics: Estimated walking time and recommended mode of transport (e.g., 'Take the Metro Line 2 to save 30 mins').\n" +
+            "Estimated Daily Cost: ₹ [Total] INR (detailed breakdown of entry fees and food).\n" +
+            "---", 
+            destination, startDate, endDate
         );
 
-        // Try Gemini endpoints first
-        String[] geminiUrls = new String[] {
-            "https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash-latest:generateContent?key=" + apiKey,
-            "https://generativelanguage.googleapis.com/v1/models/gemini-1.5-pro-latest:generateContent?key=" + apiKey,
-            "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=" + apiKey,
-            "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=" + apiKey
+        // 2. 2026 Stable Endpoints
+        String[] modelEndpoints = {
+            "https://generativelanguage.googleapis.com/v1/models/gemini-3-flash:generateContent",
+            "https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash-lite:generateContent",
+            "https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent"
         };
 
-        JSONObject content = new JSONObject()
-            .put("role", "user")
-            .put("parts", new JSONArray().put(new JSONObject().put("text", prompt)));
-        JSONObject requestContentBody = new JSONObject().put("contents", new JSONArray().put(content));
+        // 3. Request Config
+        JSONObject config = new JSONObject()
+            .put("temperature", 1.0) // 2026 standard for Gemini 3 (best for creative planning)
+            .put("maxOutputTokens", 4096) 
+            .put("topP", 0.95);
 
-        String geminiResponse = tryPostGenerate(requestContentBody, geminiUrls, true);
-        if (geminiResponse != null) {
-            return geminiResponse;
-        }
+        for (String baseUrl : modelEndpoints) {
+            int retryDelay = 2000;
+            for (int i = 0; i < 3; i++) {
+                try {
+                    String fullUrl = baseUrl + "?key=" + cleanKey;
 
-        // Fallback to PaLM text-bison
-        String[] palmUrls = new String[] {
-            "https://generativelanguage.googleapis.com/v1beta2/models/text-bison-001:generateText?key=" + apiKey
-        };
-        JSONObject palmBody = new JSONObject().put("prompt", new JSONObject().put("text", prompt));
-        String palmResponse = tryPostGenerate(palmBody, palmUrls, false);
-        if (palmResponse != null) {
-            return palmResponse;
-        }
+                    JSONObject textPart = new JSONObject().put("text", prompt);
+                    JSONObject content = new JSONObject().put("parts", new JSONArray().put(textPart));
+                    JSONObject body = new JSONObject()
+                        .put("contents", new JSONArray().put(content))
+                        .put("generationConfig", config);
 
-        return buildFallbackItinerary(destination, startDate, endDate);
-    }
+                    HttpHeaders headers = new HttpHeaders();
+                    headers.setContentType(MediaType.APPLICATION_JSON);
+                    HttpEntity<String> entity = new HttpEntity<>(body.toString(), headers);
 
-    private String tryPostGenerate(JSONObject body, String[] urls, boolean parseAsGenerateContent) {
-        for (String url : urls) {
-            try {
-                HttpHeaders headers = new HttpHeaders();
-                headers.setContentType(MediaType.APPLICATION_JSON);
-                HttpEntity<String> entity = new HttpEntity<>(body.toString(), headers);
+                    ResponseEntity<String> response = restTemplate.postForEntity(fullUrl, entity, String.class);
 
-                ResponseEntity<String> response = restTemplate.postForEntity(url, entity, String.class);
-                if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
-                    JSONObject json = new JSONObject(response.getBody());
-                    if (parseAsGenerateContent) {
-                        JSONArray candidates = json.optJSONArray("candidates");
-                        if (candidates != null && !candidates.isEmpty()) {
-                            JSONObject candidate = candidates.getJSONObject(0);
-                            JSONObject candContent = candidate.optJSONObject("content");
-                            if (candContent != null) {
-                                JSONArray parts = candContent.optJSONArray("parts");
-                                if (parts != null) {
-                                    StringBuilder sb = new StringBuilder();
-                                    for (int i = 0; i < parts.length(); i++) {
-                                        sb.append(parts.getJSONObject(i).optString("text", ""));
-                                    }
-                                    if (sb.length() > 0) {
-                                        return sb.toString();
-                                    }
-                                }
-                            }
-                        }
-                    } else {
-                        JSONArray candidates = json.optJSONArray("candidates");
-                        if (candidates != null && !candidates.isEmpty()) {
-                            JSONObject cand0 = candidates.getJSONObject(0);
-                            String output = cand0.optString("output", "");
-                            if (!output.isEmpty()) {
-                                return output;
-                            }
-                        }
-                        String output = json.optString("output", "");
-                        if (!output.isEmpty()) {
-                            return output;
-                        }
+                    if (response.getStatusCode().is2xxSuccessful()) {
+                        JSONObject json = new JSONObject(response.getBody());
+                        return json.getJSONArray("candidates")
+                                   .getJSONObject(0)
+                                   .getJSONObject("content")
+                                   .getJSONArray("parts")
+                                   .getJSONObject(0)
+                                   .getString("text");
                     }
+                } catch (org.springframework.web.client.HttpServerErrorException.ServiceUnavailable e) {
+                    // Handle 503 Overloaded with Exponential Backoff
+                    try { Thread.sleep(retryDelay); } catch (InterruptedException ignored) {}
+                    retryDelay *= 2; 
+                } catch (Exception e) {
+                    System.out.println("Model " + baseUrl + " error: " + e.getMessage());
+                    break; // Move to next model
                 }
-            } catch (Exception ignored) {
             }
         }
-        return null;
-    }
-
-    private String buildFallbackItinerary(String destination, String startDate, String endDate) {
-        try {
-            DateTimeFormatter fmt = DateTimeFormatter.ofPattern("yyyy-MM-dd");
-            LocalDate start = LocalDate.parse(startDate, fmt);
-            LocalDate end = LocalDate.parse(endDate, fmt);
-            int days = (int) ChronoUnit.DAYS.between(start, end) + 1;
-            if (days <= 0) days = 1;
-
-            List<Destination> attractions = destinationService.searchDestinationsGoogle(destination, "tourist_attraction");
-            List<Destination> restaurants = destinationService.searchDestinationsGoogle(destination, "restaurant");
-
-            // Sort by rating desc, then user rating count
-            Comparator<Destination> byQuality = Comparator
-                    .comparing((Destination d) -> d.getRating() == null ? 0.0 : d.getRating()).reversed()
-                    .thenComparing(d -> d.getUserRatingCount() == null ? 0 : d.getUserRatingCount(), Comparator.reverseOrder());
-
-            attractions = attractions.stream().sorted(byQuality).collect(Collectors.toList());
-            restaurants = restaurants.stream().sorted(byQuality).collect(Collectors.toList());
-
-            int attractionsPerDay = 3;
-            int restaurantsPerDay = 2;
-
-            StringBuilder sb = new StringBuilder();
-            sb.append("Trip Itinerary for ").append(destination).append(" (").append(startDate).append(" to ").append(endDate).append(")\n\n");
-
-            int aIdx = 0, rIdx = 0;
-            for (int d = 1; d <= days; d++) {
-                LocalDate current = start.plusDays(d - 1);
-                sb.append("Day ").append(d).append(" (").append(current.format(fmt)).append(")\n");
-                sb.append("- Morning:\n");
-                for (int i = 0; i < Math.min(attractionsPerDay, Math.max(0, attractions.size() - aIdx)); i++) {
-                    Destination a = attractions.get(aIdx++);
-                    sb.append("  • ").append(a.getName()).append(" — ").append(a.getAddress() != null ? a.getAddress() : "").append("\n");
-                }
-                sb.append("- Meals:\n");
-                for (int i = 0; i < Math.min(restaurantsPerDay, Math.max(0, restaurants.size() - rIdx)); i++) {
-                    Destination r = restaurants.get(rIdx++);
-                    sb.append("  • ").append(r.getName()).append(" — ").append(r.getAddress() != null ? r.getAddress() : "").append("\n");
-                }
-                sb.append("- Tips:\n");
-                sb.append("  • Use public transport or walk between nearby spots.\n");
-                sb.append("  • Book tickets in advance for popular attractions.\n\n");
-            }
-
-            if (sb.length() == 0) {
-                return "No itinerary generated.";
-            }
-            return sb.toString();
-        } catch (Exception e) {
-            e.printStackTrace();
-            return "No itinerary generated.";
-        }
+        return "Error: All AI paths are currently congested. Please try again in 1 minute.";
     }
 }

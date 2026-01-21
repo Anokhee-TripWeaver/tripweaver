@@ -7,6 +7,9 @@ public class Hotel {
     private double rating;
     private double price;
     private String roomType;
+    private String placeId;
+    private String photoUrl;
+    private java.util.List<String> photoUrls;
 
     public String getName() { return name; }
     public void setName(String name) { this.name = name; }
@@ -22,4 +25,13 @@ public class Hotel {
 
     public String getRoomType() { return roomType; }
     public void setRoomType(String roomType) { this.roomType = roomType; }
+
+    public String getPlaceId() { return placeId; }
+    public void setPlaceId(String placeId) { this.placeId = placeId; }
+
+    public String getPhotoUrl() { return photoUrl; }
+    public void setPhotoUrl(String photoUrl) { this.photoUrl = photoUrl; }
+
+    public java.util.List<String> getPhotoUrls() { return photoUrls; }
+    public void setPhotoUrls(java.util.List<String> photoUrls) { this.photoUrls = photoUrls; }
 }

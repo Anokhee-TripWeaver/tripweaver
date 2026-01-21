@@ -1,6 +1,7 @@
 import React, { useState } from "react";
-import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from "react-router-dom";
 
+import Navbar from "./components/navbar";
 import Signin from "./components/Signin";
 import Signup from "./components/Signup";
 import DestinationSearch from "./components/DestinationSearch";
@@ -8,20 +9,28 @@ import Explore from "./components/Explore";
 import Trips from "./components/Trips";
 import ItineraryPlanner from "./components/ItineraryPlanner";
 import UserProfile from "./components/UserProfile";
+import Wishlist from "./components/Wishlist";
+import Cart from "./components/Cart";
+import OAuthSuccess from "./components/OAuthSuccess";
 import "./App.css";
 import "boxicons/css/boxicons.min.css";
 
-function App() {
+function Layout() {
   const [isSignup, setIsSignup] = useState(false);
+  const location = useLocation();
+
+  // ❌ Hide navbar on signup page
+  const hideNavbar = location.pathname === "/signup";
 
   return (
-    <Router>
-      <Routes>
+    <>
+      {!hideNavbar && <Navbar />}
 
-        {/* HOME → EXPLORE */}
+      <Routes>
+        {/* HOME */}
         <Route path="/" element={<Explore />} />
 
-        {/* LOGIN / SIGNUP PAGE */}
+        {/* LOGIN / SIGNUP */}
         <Route
           path="/signup"
           element={
@@ -62,22 +71,26 @@ function App() {
           }
         />
 
-        {/* DESTINATION SEARCH */}
+        {/* OTHER PAGES */}
         <Route path="/search" element={<DestinationSearch />} />
-
-        {/* ITINERARY PLANNER */}
         <Route path="/planner" element={<ItineraryPlanner />} />
-
-        {/* TRIPS PAGE */}
         <Route path="/trips" element={<Trips />} />
-
-        {/* USER PROFILE */}
         <Route path="/profile" element={<UserProfile />} />
+        <Route path="/oauth-success" element={<OAuthSuccess />} />
+        <Route path="/wishlist" element={<Wishlist />} />
+        <Route path="/cart" element={<Cart />} />
 
-        {/* REDIRECT any unknown route */}
+        {/* FALLBACK */}
         <Route path="*" element={<Navigate to="/signup" />} />
-
       </Routes>
+    </>
+  );
+}
+
+function App() {
+  return (
+    <Router>
+      <Layout />
     </Router>
   );
 }
