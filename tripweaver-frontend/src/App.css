@@ -9,17 +9,15 @@
 
 body {
   min-height: 100vh;
-  /* Unified full-bleed background for the whole app */
   background-image: url('./assets/unnamed.jpg');
   background-size: cover;
   background-position: center;
   background-attachment: fixed;
-  /* Allow scrolling for long content */
   overflow-x: hidden;
   overflow-y: auto;
 }
 
-/* Wrapper for Auth Pages to center the card */
+/* ---------- Auth Wrapper ---------- */
 .auth-wrapper {
   min-height: 100vh;
   display: flex;
@@ -28,20 +26,19 @@ body {
   padding: 20px;
 }
 
+/* ---------- Main Container ---------- */
 .container {
   display: flex;
-  background: rgba(255, 255, 255, 0.85); /* Semi-transparent white */
-  backdrop-filter: blur(10px); /* Glassmorphism */
   width: 950px;
   height: 550px;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(10px);
   border-radius: 20px;
   overflow: hidden;
   box-shadow: 0 15px 30px rgba(0,0,0,0.1);
-  position: relative;
-  transition: transform 0.8s ease-in-out;
+  transition: all 0.6s ease-in-out;
 }
 
-/* ---------- Sliding Animation ---------- */
 .container.active .form-box {
   transform: translateX(100%);
 }
@@ -50,9 +47,11 @@ body {
   transform: translateX(-100%);
 }
 
-.form-box, .info-box {
+/* ---------- Form & Info Box ---------- */
+.form-box,
+.info-box {
   width: 50%;
-  transition: transform 0.8s ease-in-out;
+  transition: all 0.6s ease-in-out;
 }
 
 /* ---------- Form Section ---------- */
@@ -69,8 +68,8 @@ body {
   text-align: center;
 }
 
+/* ---------- Inputs ---------- */
 .input-box {
-  position: relative;
   margin: 20px 0;
 }
 
@@ -82,17 +81,18 @@ body {
   outline: none;
 }
 
+/* ---------- Main Button ---------- */
 .btn {
   width: 100%;
+  padding: 12px;
+  margin-top: 10px;
   background: #6c63ff;
   color: #fff;
   border: none;
-  padding: 12px;
   border-radius: 8px;
   font-size: 16px;
   cursor: pointer;
-  transition: 0.3s ease;
-  margin-top: 10px;
+  transition: 0.3s;
 }
 
 .btn:hover {
@@ -110,37 +110,33 @@ body {
   text-align: center;
 }
 
-/* ---------- Signin / Signup Pages ---------- */
-/* Reset these to fit inside the .container form-box */
-.signin-page, .signup-page {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  background: transparent; 
+.info-box h2 {
+  font-size: 30px;
+  margin-bottom: 10px;
 }
 
-.signin-card, .signup-card {
-  background: transparent;
-  box-shadow: none;
-  padding: 0;
-  width: 100%;
-  text-align: center;
+.info-box p {
+  font-size: 16px;
+  opacity: 0.9;
+  max-width: 300px;
 }
 
-.signin-title, .signup-title {
+/* ---------- Titles ---------- */
+.signin-title,
+.signup-title {
   font-size: 2rem;
   font-weight: 600;
   margin-bottom: 10px;
   color: #333;
 }
 
-.signin-subtitle, .signup-subtitle {
+.signin-subtitle,
+.signup-subtitle {
   color: #666;
   margin-bottom: 30px;
 }
 
+/* ---------- Messages ---------- */
 .error-box {
   background: #ffebee;
   color: #c62828;
@@ -159,48 +155,57 @@ body {
   font-size: 0.9rem;
 }
 
+/* ---------- Google Login Button (FINAL FIX) ---------- */
+.google-btn {
+  width: 100%;
+  height: 50px;
+  margin-top: 15px;
 
-.info-box h2 {
-  font-size: 30px;
-  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+
+  background: #ffffff;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+
+  font-size: 15px;
+  font-weight: 500;
+  color: #333;
+
+  cursor: pointer;
+  transition: all 0.3s ease;
 }
 
-.info-box p {
-  font-size: 16px;
-  opacity: 0.9;
-  max-width: 300px;
+/* FORCE Google logo size */
+.google-btn img {
+  width: 18px !important;
+  height: 18px !important;
+  max-width: 18px !important;
+  max-height: 18px !important;
+  object-fit: contain;
+}
+
+.google-btn:hover {
+  background: #f5f5f5;
+  box-shadow: 0 6px 15px rgba(0,0,0,0.08);
 }
 
 /* ---------- Toggle Text ---------- */
 .toggle-text {
+  margin-top: 14px;
   text-align: center;
-  margin-top: 15px;
   font-size: 14px;
   color: #555;
 }
 
 .toggle-text span {
   color: #6c63ff;
-  cursor: pointer;
   font-weight: 500;
+  cursor: pointer;
 }
 
 .toggle-text span:hover {
   text-decoration: underline;
-}
-/* Animation for toggle */
-.container {
-  transition: all 0.6s ease-in-out;
-}
-
-.container.active .form-box {
-  transform: translateX(100%);
-}
-
-.container.active .info-box {
-  transform: translateX(-100%);
-}
-
-.form-box, .info-box {
-  transition: all 0.6s ease-in-out;
 }

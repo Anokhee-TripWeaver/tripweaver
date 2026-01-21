@@ -9,6 +9,7 @@ import com.tripweaver.model.TripResponse;
 import com.tripweaver.model.Hotel;
 import com.tripweaver.model.Destination;
 import java.util.List;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class TripService {
@@ -29,8 +30,13 @@ public class TripService {
         return savedTripRepository.save(trip);
     }
 
-    public List<SavedTrip> getAllSavedTrips() {
-        return savedTripRepository.findAll();
+    public List<SavedTrip> getSavedTripsByUsername(String username) {
+        return savedTripRepository.findByUsername(username);
+    }
+
+    @Transactional
+    public void deleteSavedTrip(Long id, String username) {
+        savedTripRepository.deleteByIdAndUsername(id, username);
     }
 
     public TripResponse getTripData(String origin, String destination, String date, Double budget) {
@@ -39,44 +45,34 @@ public class TripService {
         
         List<Hotel> hotels = hotelService.searchHotels(destination, budget);
         
-        // Enrich hotels with images from Google Places API
-        int limit = 10;
-        int count = 0;
         for (Hotel h : hotels) {
-            if (count >= limit) break;
-            
-            // Fetch if no photos or limited photos (to get "View Rooms" gallery)
-            if (h.getPhotoUrls() == null || h.getPhotoUrls().isEmpty() || h.getPhotoUrls().size() < 3) {
-                try {
-                    String query = h.getName() + " " + destination;
-                    List<Destination> results = destinationService.searchDestinationsGoogle(query, "accommodation");
-                    
-                    if (!results.isEmpty()) {
-                        Destination d = results.get(0);
-                        
-                        // Set main photo if missing
-                        if (h.getPhotoUrl() == null || h.getPhotoUrl().isEmpty()) {
-                            h.setPhotoUrl(d.getPhotoUrl());
-                        }
-                        
-                        // Merge photos
-                        if (d.getPhotoUrls() != null && !d.getPhotoUrls().isEmpty()) {
-                            List<String> currentPhotos = h.getPhotoUrls();
-                            if (currentPhotos == null) currentPhotos = new java.util.ArrayList<>();
-                            
-                            for (String p : d.getPhotoUrls()) {
-                                if (!currentPhotos.contains(p)) {
-                                    currentPhotos.add(p);
-                                }
-                            }
-                            h.setPhotoUrls(currentPhotos);
-                        }
-                    }
-                } catch (Exception e) {
-                    System.err.println("Error fetching image for " + h.getName() + ": " + e.getMessage());
+            try {
+                String query;
+                if (h.getAddress() != null && !h.getAddress().isBlank()) {
+                    query = h.getName() + " " + h.getAddress();
+                } else {
+                    query = h.getName() + " " + destination;
                 }
+                List<Destination> results = destinationService.searchDestinationsGoogle(query, "accommodation");
+                
+                if (!results.isEmpty()) {
+                    Destination d = results.get(0);
+                    
+                    if (d.getPhotoUrl() != null && !d.getPhotoUrl().isEmpty()) {
+                        h.setPhotoUrl(d.getPhotoUrl());
+                    }
+
+                    if (d.getPhotoUrls() != null && !d.getPhotoUrls().isEmpty()) {
+                        h.setPhotoUrls(new java.util.ArrayList<>(d.getPhotoUrls()));
+                    }
+
+                    if (d.getPlaceId() != null && !d.getPlaceId().isEmpty()) {
+                        h.setPlaceId(d.getPlaceId());
+                    }
+                }
+            } catch (Exception e) {
+                System.err.println("Error fetching image for " + h.getName() + ": " + e.getMessage());
             }
-            count++;
         }
         
         response.setHotels(hotels);

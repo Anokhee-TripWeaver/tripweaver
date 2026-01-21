@@ -16,6 +16,7 @@ public class SavedTrip {
     private String endDate;
     private Double totalCost;
     private Double budget;
+    private String username;
 
     // JSON string for complex objects (simplified for this demo)
     @Column(columnDefinition = "TEXT")
@@ -79,6 +80,14 @@ public class SavedTrip {
 
     public void setBudget(Double budget) {
         this.budget = budget;
+    }
+
+    public String getUsername() {
+        return username;
+    }
+
+    public void setUsername(String username) {
+        this.username = username;
     }
 
     public String getFlightDetails() {

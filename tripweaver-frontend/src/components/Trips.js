@@ -27,8 +27,53 @@ function Trips() {
     const [showGallery, setShowGallery] = useState(null);
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
+    const username = sessionStorage.getItem("username");
+    const cartKey = username ? `cart-${username}` : "cart";
+
+    // Load session data on mount
+    useEffect(() => {
+        const savedSession = sessionStorage.getItem("trip_session");
+        if (savedSession) {
+            try {
+                const data = JSON.parse(savedSession);
+                setFormData(data.formData);
+                setTrip(data.trip);
+                setSelectedFlight(data.selectedFlight);
+                setSelectedReturnFlight(data.selectedReturnFlight);
+                setSelectedHotel(data.selectedHotel);
+                setReturnFlights(data.returnFlights);
+                setStep(data.step);
+            } catch (e) {
+                console.error("Failed to restore session", e);
+            }
+        }
+    }, []);
+
+    // Save session data whenever state changes
+    useEffect(() => {
+        const sessionData = {
+            formData,
+            trip,
+            selectedFlight,
+            selectedReturnFlight,
+            selectedHotel,
+            returnFlights,
+            step
+        };
+        sessionStorage.setItem("trip_session", JSON.stringify(sessionData));
+    }, [formData, trip, selectedFlight, selectedReturnFlight, selectedHotel, returnFlights, step]);
+
+    // Clear comparison list and modal whenever step changes
+    useEffect(() => {
+        setCompareList([]);
+        setShowCompareModal(false);
+    }, [step]);
+
     const handleFlightSelect = (flight) => {
         setSelectedFlight(flight);
+        // Reset subsequent steps when changing flight
+        setSelectedHotel(null);
+        setSelectedReturnFlight(null);
         setStep(2);
         window.scrollTo(0, 0);
     };
@@ -47,6 +92,8 @@ function Trips() {
 
     const handleHotelSelect = async (hotel) => {
         setSelectedHotel(hotel);
+        // Reset subsequent step when changing hotel
+        setSelectedReturnFlight(null);
         setLoading(true);
         try {
             // Fetch return flights
@@ -74,35 +121,81 @@ function Trips() {
         }
     };
 
+    // Add or toggle an item in the comparison list (max 2, same type only)
     const addToCompare = (item, type) => {
-        if (compareList.length >= 3) {
-            alert("You can compare up to 3 items.");
+        const existingIndex = compareList.findIndex(
+            i =>
+                i.type === type &&
+                ((i.id && item.id && i.id === item.id) ||
+                    (i.flightNumber && item.flightNumber && i.flightNumber === item.flightNumber) ||
+                    (i.name && item.name && i.name === item.name))
+        );
+
+        // If already selected, remove it (toggle off)
+        if (existingIndex !== -1) {
+            const updated = [...compareList];
+            updated.splice(existingIndex, 1);
+            setCompareList(updated);
             return;
         }
-        if (compareList.some(i => i.id === item.id || (i.flightNumber && i.flightNumber === item.flightNumber) || (i.name && i.name === item.name))) {
-            alert("Item already in comparison list.");
+
+        // If there is an item of a different type, block mixing flights and hotels
+        if (compareList.length > 0 && compareList[0].type !== type) {
+            alert("You can only compare flights with flights or hotels with hotels.");
             return;
         }
+
+        // Enforce max of 2 items
+        if (compareList.length >= 2) {
+            alert("You can compare up to 2 options at a time.");
+            return;
+        }
+
         setCompareList([...compareList, { ...item, type }]);
     };
 
-    const removeFromCompare = (index) => {
-        const newList = [...compareList];
-        newList.splice(index, 1);
-        setCompareList(newList);
-    };
-
+    // Open the comparison modal only when exactly two options are selected
     const openCompareModal = () => {
-        if (compareList.length < 1) {
-            alert("Select items to compare.");
+        if (compareList.length !== 2) {
+            alert("Select exactly two options to compare.");
             return;
         }
         setShowCompareModal(true);
     };
 
-    const openGallery = (hotel) => {
-        setShowGallery(hotel);
+    const openGallery = async (hotel) => {
+        const initialPhotos =
+            hotel.photoUrls && hotel.photoUrls.length > 0
+                ? [...hotel.photoUrls]
+                : hotel.photoUrl
+                    ? [hotel.photoUrl]
+                    : [];
+
+        setShowGallery({
+            ...hotel,
+            photoUrls: initialPhotos
+        });
         setCurrentImageIndex(0);
+
+        if (hotel.placeId) {
+            try {
+                const res = await axios.get(`${API_BASE}/destination/photos/${hotel.placeId}`);
+                const urls = res.data || [];
+                if (urls.length > 0) {
+                    setShowGallery(prev =>
+                        prev
+                            ? {
+                                  ...prev,
+                                  photoUrls: urls
+                              }
+                            : prev
+                    );
+                    setCurrentImageIndex(0);
+                }
+            } catch (err) {
+                console.error(err);
+            }
+        }
     };
 
     const closeGallery = () => {
@@ -215,6 +308,7 @@ function Trips() {
         return parseFloat(priceStr.replace(/[^0-9.]/g, ""));
     };
 
+    // Compute total cost of the currently selected trip (used for budget tracker)
     const getTotalCost = () => {
         let total = 0;
         if (selectedFlight) {
@@ -229,9 +323,74 @@ function Trips() {
         return total;
     };
 
+    // Remaining budget after current selections
     const getRemainingBudget = () => {
         const budget = parseFloat(formData.budget) || 0;
         return budget - getTotalCost();
+    };
+
+    // Helper to compute total duration in minutes for a flight
+    const getFlightDurationMinutes = (flight) => {
+        if (!flight || !flight.departureTime || !flight.arrivalTime) return null;
+        const dep = new Date(flight.departureTime);
+        const arr = new Date(flight.arrivalTime);
+        const diffMs = arr - dep;
+        if (isNaN(diffMs) || diffMs <= 0) return null;
+        return Math.round(diffMs / (1000 * 60));
+    };
+
+    // Pretty label like "3h 45m" from minutes
+    const formatDuration = (minutes) => {
+        if (minutes == null) return "N/A";
+        const h = Math.floor(minutes / 60);
+        const m = minutes % 60;
+        if (h === 0) return `${m}m`;
+        if (m === 0) return `${h}h`;
+        return `${h}h ${m}m`;
+    };
+
+    // Total cost contribution of a single option being compared
+    const getOptionTotalCost = (item, type) => {
+        if (!item) return 0;
+        if (type === "flight") {
+            return parsePrice(item.price);
+        }
+        if (type === "hotel") {
+            return (item.price || 0) * calculateNights();
+        }
+        return 0;
+    };
+
+    // Base cost from already selected parts of the trip (excluding the option we are evaluating)
+    const getBaseCostForComparison = (type) => {
+        const budget = parseFloat(formData.budget) || 0;
+        if (!budget) return 0;
+
+        let base = 0;
+        if (type === "flight") {
+            // For outbound comparison (step 1) there is nothing selected yet
+            // For return comparison (step 3) user already chose outbound flight and hotel
+            if (step >= 2 && selectedFlight) {
+                base += parsePrice(selectedFlight.price);
+            }
+            if (step >= 3 && selectedHotel) {
+                base += selectedHotel.price * calculateNights();
+            }
+        } else if (type === "hotel") {
+            // When comparing hotels (step 2) outbound flight is already fixed
+            if (selectedFlight) {
+                base += parsePrice(selectedFlight.price);
+            }
+        }
+        return base;
+    };
+
+    // Check if picking this option would breach the overall budget
+    const isOptionOverBudget = (item, type) => {
+        const budget = parseFloat(formData.budget) || 0;
+        if (!budget) return false;
+        const totalWithOption = getBaseCostForComparison(type) + getOptionTotalCost(item, type);
+        return totalWithOption > budget;
     };
 
     const handleAddToCart = () => {
@@ -254,8 +413,8 @@ function Trips() {
             nights: calculateNights()
         };
 
-        const existingCart = JSON.parse(localStorage.getItem("cart") || "[]");
-        localStorage.setItem("cart", JSON.stringify([...existingCart, cartItem]));
+        const existingCart = JSON.parse(localStorage.getItem(cartKey) || "[]");
+        localStorage.setItem(cartKey, JSON.stringify([...existingCart, cartItem]));
 
         alert(`✅ Added to cart! Total: ₹${total}`);
     };
@@ -270,7 +429,8 @@ function Trips() {
                 budget: parseFloat(formData.budget),
                 flightDetails: JSON.stringify(selectedFlight),
                 returnFlightDetails: selectedReturnFlight ? JSON.stringify(selectedReturnFlight) : null,
-                hotelDetails: JSON.stringify(selectedHotel)
+                hotelDetails: JSON.stringify(selectedHotel),
+                username
             };
 
             await axios.post(`${API_BASE}/trip/save`, tripData, { withCredentials: true });
@@ -279,6 +439,13 @@ function Trips() {
             console.error(err);
             alert("Failed to save trip. Please try again.");
         }
+    };
+
+    const buildMapsUrl = (hotel) => {
+        if (!hotel || (!hotel.name && !hotel.address)) return null;
+        const query = `${hotel.name || ""} ${hotel.address || ""}`.trim();
+        if (!query) return null;
+        return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
     };
 
     return (
@@ -314,7 +481,7 @@ function Trips() {
                 </div>
             )}
 
-            {/* Compare Button */}
+            {/* Compare Button (enabled only when exactly two items are selected) */}
             {compareList.length > 0 && (
                 <div style={{
                     position: 'fixed',
@@ -324,15 +491,17 @@ function Trips() {
                 }}>
                     <button 
                         onClick={openCompareModal}
+                        disabled={compareList.length !== 2}
                         style={{
                             padding: '12px 24px',
-                            background: '#673AB7',
+                            background: compareList.length === 2 ? '#673AB7' : '#B39DDB',
                             color: 'white',
                             border: 'none',
                             borderRadius: '30px',
                             boxShadow: '0 4px 10px rgba(0,0,0,0.3)',
-                            cursor: 'pointer',
-                            fontWeight: 'bold'
+                            cursor: compareList.length === 2 ? 'pointer' : 'not-allowed',
+                            fontWeight: 'bold',
+                            opacity: compareList.length === 2 ? 1 : 0.7
                         }}
                     >
                         Compare ({compareList.length})
@@ -355,27 +524,166 @@ function Trips() {
                             <h3>Compare Options</h3>
                             <button onClick={() => setShowCompareModal(false)}>Close</button>
                         </div>
-                        <div style={{ display: 'flex', gap: '20px', overflowX: 'auto' }}>
-                            {compareList.map((item, idx) => (
-                                <div key={idx} style={{ minWidth: '250px', padding: '15px', border: '1px solid #ddd', borderRadius: '8px' }}>
-                                    <button onClick={() => removeFromCompare(idx)} style={{ float: 'right', color: 'red' }}>x</button>
-                                    <h4>{item.name || item.airline}</h4>
-                                    {item.type === 'flight' ? (
-                                        <>
-                                            <p>Flight: {item.flightNumber}</p>
-                                            <p>Price: {item.price}</p>
-                                            <p>Time: {item.departureTime.split('T')[1]?.slice(0,5)} - {item.arrivalTime.split('T')[1]?.slice(0,5)}</p>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <p>Rating: {item.rating} ⭐</p>
-                                            <p>Price: ₹{item.price}/night</p>
-                                            <p>Address: {item.address}</p>
-                                        </>
-                                    )}
-                                </div>
-                            ))}
-                        </div>
+
+                        {compareList.length === 2 && (
+                            <>
+                                {compareList[0].type === "flight" ? (
+                                    // Flights comparison table
+                                    <div>
+                                        <div style={{ marginBottom: '10px', fontSize: '0.9rem', color: '#555' }}>
+                                            Comparing flights based on price, duration, stops, airline and departure time.
+                                        </div>
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', alignItems: 'stretch' }}>
+                                            {compareList.map((flight, idx) => {
+                                                const duration = getFlightDurationMinutes(flight);
+                                                const price = getOptionTotalCost(flight, "flight");
+                                                const overBudget = isOptionOverBudget(flight, "flight");
+                                                const other = compareList[1 - idx];
+                                                const otherDuration = getFlightDurationMinutes(other);
+                                                const otherPrice = getOptionTotalCost(other, "flight");
+
+                                                const isCheapest = price <= otherPrice;
+                                                const isShortest = duration != null && (otherDuration == null || duration <= otherDuration);
+
+                                                return (
+                                                    <div key={idx} style={{ border: '1px solid #ddd', borderRadius: '8px', padding: '12px' }}>
+                                                        <div style={{ fontWeight: 'bold', marginBottom: '6px' }}>
+                                                            {flight.airline} ({flight.flightNumber})
+                                                        </div>
+                                                        <div style={{ fontSize: '0.9rem', marginBottom: '4px' }}>
+                                                            {flight.departureAirport} ➝ {flight.arrivalAirport}
+                                                        </div>
+                                                        <div style={{ fontSize: '0.9rem', marginBottom: '4px' }}>
+                                                            <strong>Price:</strong>{" "}
+                                                            <span style={{ color: isCheapest ? 'green' : '#333' }}>
+                                                                ₹{price}
+                                                            </span>
+                                                        </div>
+                                                        <div style={{ fontSize: '0.9rem', marginBottom: '4px' }}>
+                                                            <strong>Total duration:</strong>{" "}
+                                                            <span style={{ color: isShortest ? 'green' : '#333' }}>
+                                                                {formatDuration(duration)}
+                                                            </span>
+                                                        </div>
+                                                        <div style={{ fontSize: '0.9rem', marginBottom: '4px' }}>
+                                                            <strong>Stops:</strong> {typeof flight.stops === "number" ? flight.stops : 0}
+                                                        </div>
+                                                        <div style={{ fontSize: '0.9rem', marginBottom: '8px' }}>
+                                                            <strong>Departure time:</strong>{" "}
+                                                            {flight.departureTime.split('T')[1]?.slice(0,5) || flight.departureTime.split(' ')[1]}
+                                                        </div>
+
+                                                        {overBudget && (
+                                                            <div style={{ fontSize: '0.85rem', color: 'red', marginBottom: '6px' }}>
+                                                                Over remaining budget for this step.
+                                                            </div>
+                                                        )}
+
+                                                        <button
+                                                            onClick={() => {
+                                                                if (overBudget) return;
+                                                                if (step === 1) {
+                                                                    handleFlightSelect(flight);
+                                                                } else if (step === 3) {
+                                                                    handleReturnFlightSelect(flight);
+                                                                }
+                                                                setShowCompareModal(false);
+                                                            }}
+                                                            disabled={overBudget}
+                                                            style={{
+                                                                width: '100%',
+                                                                padding: '8px',
+                                                                background: overBudget ? '#ccc' : '#2196F3',
+                                                                color: '#fff',
+                                                                border: 'none',
+                                                                borderRadius: '4px',
+                                                                cursor: overBudget ? 'not-allowed' : 'pointer',
+                                                                fontWeight: 'bold',
+                                                                fontSize: '0.9rem'
+                                                            }}
+                                                        >
+                                                            {overBudget ? "Over Budget" : "Choose this Flight"}
+                                                        </button>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                ) : (
+                                    // Hotels comparison table
+                                    <div>
+                                        <div style={{ marginBottom: '10px', fontSize: '0.9rem', color: '#555' }}>
+                                            Comparing hotels based on price per night, rating, location and amenities.
+                                        </div>
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', alignItems: 'stretch' }}>
+                                            {compareList.map((hotel, idx) => {
+                                                const pricePerNight = hotel.price || 0;
+                                                const total = getOptionTotalCost(hotel, "hotel");
+                                                const overBudget = isOptionOverBudget(hotel, "hotel");
+                                                const other = compareList[1 - idx];
+                                                const otherPrice = other.price || 0;
+
+                                                const isCheapest = pricePerNight <= otherPrice;
+
+                                                return (
+                                                    <div key={idx} style={{ border: '1px solid #ddd', borderRadius: '8px', padding: '12px' }}>
+                                                        <div style={{ fontWeight: 'bold', marginBottom: '6px' }}>
+                                                            {hotel.name}
+                                                        </div>
+                                                        <div style={{ fontSize: '0.9rem', marginBottom: '4px' }}>
+                                                            <strong>Location:</strong> {hotel.address}
+                                                        </div>
+                                                        <div style={{ fontSize: '0.9rem', marginBottom: '4px' }}>
+                                                            <strong>Price per night:</strong>{" "}
+                                                            <span style={{ color: isCheapest ? 'green' : '#333' }}>
+                                                                ₹{pricePerNight}
+                                                            </span>
+                                                        </div>
+                                                        <div style={{ fontSize: '0.9rem', marginBottom: '4px' }}>
+                                                            <strong>Total for stay:</strong> ₹{total}
+                                                        </div>
+                                                        <div style={{ fontSize: '0.9rem', marginBottom: '4px' }}>
+                                                            <strong>Rating:</strong> {hotel.rating} ⭐
+                                                        </div>
+                                                        <div style={{ fontSize: '0.9rem', marginBottom: '8px' }}>
+                                                            <strong>Amenities:</strong> {hotel.roomType || "Standard amenities"}
+                                                        </div>
+
+                                                        {overBudget && (
+                                                            <div style={{ fontSize: '0.85rem', color: 'red', marginBottom: '6px' }}>
+                                                                Over remaining budget for this step.
+                                                            </div>
+                                                        )}
+
+                                                        <button
+                                                            onClick={() => {
+                                                                if (overBudget) return;
+                                                                handleHotelSelect(hotel);
+                                                                setShowCompareModal(false);
+                                                            }}
+                                                            disabled={overBudget}
+                                                            style={{
+                                                                width: '100%',
+                                                                padding: '8px',
+                                                                background: overBudget ? '#ccc' : '#4CAF50',
+                                                                color: '#fff',
+                                                                border: 'none',
+                                                                borderRadius: '4px',
+                                                                cursor: overBudget ? 'not-allowed' : 'pointer',
+                                                                fontWeight: 'bold',
+                                                                fontSize: '0.9rem'
+                                                            }}
+                                                        >
+                                                            {overBudget ? "Over Budget" : "Choose this Hotel"}
+                                                        </button>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
+                            </>
+                        )}
                     </div>
                 </div>
             )}
@@ -464,13 +772,23 @@ function Trips() {
                                                 <span className="price" style={{ fontWeight: 'bold', color: '#333' }}>
                                                     {f.price}
                                                 </span>
-                                                <button 
-                                                    className="select-btn"
-                                                    onClick={() => handleFlightSelect(f)}
-                                                    style={{ padding: '8px 20px', backgroundColor: '#2196F3', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
-                                                >
-                                                    Select Flight & Continue
-                                                </button>
+                                                <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                                                    <label style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={compareList.some(c => c.type === 'flight' && c.flightNumber === f.flightNumber)}
+                                                            onChange={() => addToCompare(f, 'flight')}
+                                                        />
+                                                        Compare
+                                                    </label>
+                                                    <button 
+                                                        className="select-btn"
+                                                        onClick={() => handleFlightSelect(f)}
+                                                        style={{ padding: '8px 20px', backgroundColor: '#2196F3', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                                                    >
+                                                        Select Flight & Continue
+                                                    </button>
+                                                </div>
                                             </div>
                                         </div>
                                     ))}
@@ -495,7 +813,7 @@ function Trips() {
                                         >
                                             <div style={{ position: 'relative' }}>
                                                 <img 
-                                                    src={h.photoUrl || `https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=800&q=60`} 
+                                                    src={(h.photoUrls && h.photoUrls.length > 0 ? h.photoUrls[0] : h.photoUrl) || `https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=800&q=60`} 
                                                     alt={h.name}
                                                     style={{ width: '100%', height: '200px', objectFit: 'cover', borderRadius: '12px', marginBottom: '10px' }} 
                                                 />
@@ -511,7 +829,31 @@ function Trips() {
                                                 </button>
                                             </div>
                                             <h4>{h.name}</h4>
-                                            <p className="addr">📍 {h.address}</p>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
+                                                <p className="addr" style={{ margin: 0 }}>📍 {h.address}</p>
+                                                <button 
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        const url = buildMapsUrl(h);
+                                                        if(url) window.open(url, '_blank');
+                                                    }}
+                                                    style={{
+                                                        background: '#E1F5FE',
+                                                        border: '1px solid #81D4FA',
+                                                        color: '#0277BD',
+                                                        borderRadius: '20px',
+                                                        cursor: 'pointer',
+                                                        padding: '4px 12px',
+                                                        fontSize: '0.8rem',
+                                                        fontWeight: 'bold',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: '4px'
+                                                    }}
+                                                >
+                                                    📍 Location
+                                                </button>
+                                            </div>
                                             <div className="hotel-footer">
                                                 <span className="rating">⭐ {h.rating}</span>
                                                 <div className="pricing">
@@ -519,19 +861,23 @@ function Trips() {
                                                     <span className="total">for {calculateNights()} nights</span>
                                                 </div>
                                             </div>
-                                            <button 
-                                                className="select-btn"
-                                                onClick={() => handleHotelSelect(h)}
-                                                style={{ width: '100%', marginTop: '10px', padding: '10px', backgroundColor: '#4CAF50', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
-                                            >
-                                                Select Hotel & Continue
-                                            </button>
-                                            <button 
-                                                onClick={() => addToCompare(h, 'hotel')}
-                                                style={{ width: '100%', marginTop: '5px', padding: '8px', background: '#FF9800', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
-                                            >
-                                                Compare Hotel
-                                            </button>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '10px' }}>
+                                                <label style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={compareList.some(c => c.type === 'hotel' && c.name === h.name)}
+                                                        onChange={() => addToCompare(h, 'hotel')}
+                                                    />
+                                                    Compare
+                                                </label>
+                                                <button 
+                                                    className="select-btn"
+                                                    onClick={() => handleHotelSelect(h)}
+                                                    style={{ padding: '10px 20px', backgroundColor: '#4CAF50', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                                                >
+                                                    Select Hotel & Continue
+                                                </button>
+                                            </div>
                                         </div>
                                     ))}
                                 </section>
@@ -582,13 +928,15 @@ function Trips() {
                                                 <span className="price" style={{ fontWeight: 'bold', color: '#333' }}>
                                                     {f.price}
                                                 </span>
-                                                <div style={{ display: 'flex', gap: '10px' }}>
-                                                    <button 
-                                                        onClick={() => addToCompare(f, 'flight')}
-                                                        style={{ padding: '8px 15px', background: '#FF9800', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
-                                                    >
+                                                <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                                                    <label style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={compareList.some(c => c.type === 'flight' && c.flightNumber === f.flightNumber)}
+                                                            onChange={() => addToCompare(f, 'flight')}
+                                                        />
                                                         Compare
-                                                    </button>
+                                                    </label>
                                                     <button 
                                                         className="select-btn"
                                                         onClick={() => handleReturnFlightSelect(f)}
@@ -708,7 +1056,12 @@ function Trips() {
                             <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                 <button onClick={prevImage} style={{ background: 'none', border: 'none', color: '#fff', fontSize: '3rem', cursor: 'pointer', padding: '0 20px' }}>‹</button>
                                 <img 
-                                    src={showGallery.photoUrls && showGallery.photoUrls.length > 0 ? showGallery.photoUrls[currentImageIndex] : showGallery.photoUrl} 
+                                    src={
+                                        showGallery.photoUrls && showGallery.photoUrls.length > 0
+                                            ? showGallery.photoUrls[currentImageIndex]
+                                            : showGallery.photoUrl ||
+                                              `https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=800&q=60`
+                                    } 
                                     alt="Room view" 
                                     style={{ maxHeight: '100%', maxWidth: '100%', objectFit: 'contain' }}
                                 />
