@@ -96,6 +96,7 @@ public class FlightService {
                                 flight.setArrivalAirport(lastSegment.getJSONObject("arrival").getString("iataCode"));
                                 flight.setDepartureTime(firstSegment.getJSONObject("departure").getString("at"));
                                 flight.setArrivalTime(lastSegment.getJSONObject("arrival").getString("at"));
+                                flight.setStops(Math.max(0, segments.length() - 1));
                                 
                                 // Try to get price
                                 String totalPrice = null;
@@ -329,6 +330,7 @@ public class FlightService {
             
             f.setDepartureTime(depTime);
             f.setArrivalTime(arrTime);
+            f.setStops(random.nextInt(3));
             
             // Random price
             int price = 3000 + random.nextInt(15000);
