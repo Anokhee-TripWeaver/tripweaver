@@ -802,7 +802,7 @@ export default function UserProfile() {
   const requestedRequests = requestActivity.filter(
     (req) => !isReceivedRequest(req) && isPendingStatus(req.status)
   );
-
+#split money
   return (
     <div className="profile-page">
       <Navbar />
