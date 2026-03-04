@@ -10,6 +10,7 @@
   flex-direction: column;
   box-sizing: border-box;
   /* Background is now provided globally to keep pages consistent */
+  background: url('../assets/unnamed.jpg') center/cover no-repeat;
 }
 
 /* --- NAVBAR STYLES --- */

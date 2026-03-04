@@ -1,10 +1,12 @@
 import React, { useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
+import { persistIdentity, resolveProfileEmail, resolveProfileName } from "../utils/userIdentity";
 
 export default function Signin() {
   const navigate = useNavigate();
   const API_BASE = "http://localhost:8090/api";
+  const isValidEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test((value || "").trim());
 
   const [formData, setFormData] = useState({
     username: "",
@@ -30,6 +32,17 @@ export default function Signin() {
     setLoading(true);
     try {
       await axios.post(`${API_BASE}/auth/signin`, formData);
+      try {
+        const profileRes = await axios.get(`${API_BASE}/profile`, { withCredentials: true });
+        const profileName = resolveProfileName(profileRes.data) || formData.username;
+        const profileEmail = resolveProfileEmail(profileRes.data) || (isValidEmail(formData.username) ? formData.username : "");
+        persistIdentity({ name: profileName, email: profileEmail });
+      } catch {
+        persistIdentity({
+          name: formData.username,
+          email: isValidEmail(formData.username) ? formData.username : "",
+        });
+      }
       localStorage.setItem("username", formData.username);
       localStorage.removeItem("user");
       navigate("/profile");

@@ -66,7 +66,7 @@ public class UserService {
     public List<SearchHistory> getSearchHistory(String username) {
         Optional<User> userOpt = userRepository.findByUsername(username);
         if (userOpt.isPresent()) {
-            return searchHistoryRepository.findByUserOrderBySearchTimestampDesc(userOpt.get());
+            return searchHistoryRepository.findByUserOrderBySearchedAtDesc(userOpt.get());
         }
         return List.of();
     }

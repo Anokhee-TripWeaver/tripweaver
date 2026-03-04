@@ -17,6 +17,7 @@ export default function Cart() {
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
     const username = sessionStorage.getItem("username");
+    const email = sessionStorage.getItem("email");
     const cartKey = username ? `cart-${username}` : "cart";
 
     useEffect(() => {
@@ -35,8 +36,47 @@ export default function Cart() {
         localStorage.removeItem(cartKey);
     };
 
-    const handleCheckout = () => {
-        alert("Proceeding to payment gateway... (Mock)");
+    const handleCheckout = async () => {
+        if (!username) {
+            alert("Please login to complete your booking.");
+            navigate("/signup");
+            return;
+        }
+
+        if (cartItems.length === 0) {
+            alert("Your cart is empty!");
+            return;
+        }
+
+        const confirm = window.confirm(`Proceed to book ${cartItems.length} trips for ₹${cartItems.reduce((sum, item) => sum + item.totalCost, 0)}?`);
+        if (!confirm) return;
+
+        try {
+            // Process all bookings
+            const bookingPromises = cartItems.map(item => {
+                const bookingData = {
+                    destination: item.destination,
+                    startDate: item.startDate,
+                    endDate: item.endDate,
+                    totalCost: item.totalCost,
+                    flightDetails: item.flight ? JSON.stringify(item.flight) : null,
+                    returnFlightDetails: item.returnFlight ? JSON.stringify(item.returnFlight) : null,
+                    hotelDetails: item.hotel ? JSON.stringify(item.hotel) : null,
+                    username: email || username // might be null if not logged in, but backend handles principal
+                };
+                return axios.post(`${API_BASE}/bookings/create`, bookingData, { withCredentials: true });
+            });
+
+            await Promise.all(bookingPromises);
+
+            alert("✅ Booking successful! Your trips are confirmed.");
+            clearCart();
+            navigate("/bookings");
+
+        } catch (err) {
+            console.error("Booking failed", err);
+            alert("❌ Booking failed. Please try again.");
+        }
     };
 
     const openDetails = (item) => {

@@ -14,6 +14,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestTemplate;
 
 import com.tripweaver.model.Flight;
@@ -28,9 +29,17 @@ public class FlightService {
     @Value("${amadeus.api.secret}")
     private String amadeusApiSecret;
 
-    private final RestTemplate restTemplate = new RestTemplate();
+    private final RestTemplate restTemplate = buildRestTemplate();
     private String accessToken;
     private long tokenExpiryTime;
+    private volatile long amadeusRetryAfterTime;
+
+    private RestTemplate buildRestTemplate() {
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(1500);
+        factory.setReadTimeout(2500);
+        return new RestTemplate(factory);
+    }
 
     public List<Flight> searchFlights(String origin, String destination, String date) {
         List<Flight> flights = new ArrayList<>();
@@ -120,12 +129,10 @@ public class FlightService {
                 }
                 } catch (Exception e) {
                     System.out.println("Amadeus API request failed: " + e.getMessage());
-                    e.printStackTrace();
                 }
             }
         } catch (Exception e) {
-            e.printStackTrace();
-            System.out.println("Amadeus API failed, falling back to mock data.");
+            System.out.println("Amadeus API failed, falling back to mock data: " + e.getMessage());
         }
 
         // Fallback mock if API fails or returns no results
@@ -258,13 +265,15 @@ public class FlightService {
             }
         } catch (Exception e) {
             System.out.println("Failed to resolve IATA code for: " + location);
-            e.printStackTrace();
         }
         
         return null; // Could not resolve
     }
 
     private String getAccessToken() {
+        if (System.currentTimeMillis() < amadeusRetryAfterTime) {
+            return null;
+        }
         if (accessToken != null && System.currentTimeMillis() < tokenExpiryTime) {
             return accessToken;
         }
@@ -290,7 +299,9 @@ public class FlightService {
                 return accessToken;
             }
         } catch (Exception e) {
-            e.printStackTrace();
+            // Cooldown to avoid repeated external timeouts on every search request.
+            amadeusRetryAfterTime = System.currentTimeMillis() + (5 * 60 * 1000);
+            System.out.println("Failed to fetch Amadeus access token: " + e.getMessage());
         }
         return null;
     }

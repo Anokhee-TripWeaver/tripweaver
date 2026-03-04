@@ -26,14 +26,48 @@ public class SearchHistory {
     @Column(name = "searched_at")
     private LocalDateTime searchedAt;
 
+    @ManyToOne
+    @JoinColumn(name = "user_id")
+    private User user;
+
+    private String origin;
+    private String destination;
+    private String searchDate;
+
     public SearchHistory() {}
 
-    @PrePersist
-    protected void onCreate() {
+    public SearchHistory(String origin, String destination, String searchDate, User user) {
+        this.origin = origin;
+        this.destination = destination;
+        this.searchDate = searchDate;
+        this.user = user;
+        this.email = user.getEmail();
+        this.query = origin + " -> " + destination;
+        this.category = searchDate;
+        this.type = "TRIP";
         this.searchedAt = LocalDateTime.now();
     }
 
+    @PrePersist
+    protected void onCreate() {
+        if (this.searchedAt == null) {
+            this.searchedAt = LocalDateTime.now();
+        }
+    }
+
     public Long getId() { return id; }
+
+    public User getUser() { return user; }
+    public void setUser(User user) { this.user = user; }
+
+    public String getOrigin() { return origin; }
+    public void setOrigin(String origin) { this.origin = origin; }
+
+    public String getDestination() { return destination; }
+    public void setDestination(String destination) { this.destination = destination; }
+
+    public String getSearchDate() { return searchDate; }
+    public void setSearchDate(String searchDate) { this.searchDate = searchDate; }
 
     public String getEmail() { return email; }
     public void setEmail(String email) { this.email = email; }

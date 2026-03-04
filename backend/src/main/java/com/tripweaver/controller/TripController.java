@@ -1,19 +1,24 @@
 package com.tripweaver.controller;
 
 import java.security.Principal;
-
-import com.tripweaver.model.SavedTrip;
-import com.tripweaver.model.TripResponse;
-import com.tripweaver.service.TripService;
-import com.tripweaver.service.SearchHistoryService;
-import com.tripweaver.util.SecurityUtil;
+import java.util.List;
+import java.util.ArrayList;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import com.tripweaver.model.CollaborationTrip;
+import com.tripweaver.model.SavedTrip;
+import com.tripweaver.model.TripResponse;
+import com.tripweaver.service.CollaborationTripService;
+import com.tripweaver.service.SearchHistoryService;
+import com.tripweaver.service.TripService;
+import com.tripweaver.util.SecurityUtil;
+
 @RestController
-@RequestMapping("/api/trip")
+@RequestMapping("/api/trips")
+@CrossOrigin(origins = "http://localhost:3000", allowCredentials = "true")
 public class TripController {
 
     @Autowired
@@ -22,13 +27,36 @@ public class TripController {
     @Autowired
     private SearchHistoryService historyService;
 
+    @Autowired
+    private CollaborationTripService collaborationTripService;
+
     @PostMapping("/save")
     public SavedTrip saveTrip(@RequestBody SavedTrip trip) {
-        return tripService.saveTrip(trip);
+
+        SavedTrip savedTrip = tripService.saveTrip(trip);
+
+        if (Boolean.TRUE.equals(trip.getOpenTrip())) {
+            CollaborationTrip openTrip = new CollaborationTrip();
+            openTrip.setDestination(trip.getDestination());
+            openTrip.setStartDate(trip.getStartDate());
+            openTrip.setEndDate(trip.getEndDate());
+            openTrip.setHostName(trip.getUsername());
+            openTrip.setHostEmail(trip.getEmail());
+            openTrip.setSeatsAvailable(trip.getSeatsAvailable());
+            openTrip.setTotalCost(trip.getTotalCost());
+            openTrip.setNote(trip.getNote());
+            openTrip.setFlightDetails(trip.getFlightDetails());
+            openTrip.setReturnFlightDetails(trip.getReturnFlightDetails());
+            openTrip.setHotelDetails(trip.getHotelDetails());
+
+            collaborationTripService.saveTrip(openTrip);
+        }
+
+        return savedTrip;
     }
 
     @GetMapping("/saved")
-    public java.util.List<SavedTrip> getSavedTrips(@RequestParam String username) {
+    public List<SavedTrip> getSavedTrips(@RequestParam String username) {
         return tripService.getSavedTripsByUsername(username);
     }
 
@@ -49,18 +77,28 @@ public class TripController {
             @RequestParam(required = false) Double budget,
             Principal principal
     ) {
-        String email = SecurityUtil.getEmail(principal);
-
-        // ✅ SAVE TRIP SEARCH
-        if (email != null) {
-            historyService.save(
-                    email,
-                    origin + " → " + destination,
-                    date,
-                    "TRIP"
-            );
+        try {
+            String email = SecurityUtil.getEmail(principal);
+            if (email != null) {
+                historyService.save(
+                        email,
+                        origin + " -> " + destination,
+                        date,
+                        "TRIP"
+                );
+            }
+        } catch (Exception e) {
+            System.err.println("Trip history save skipped: " + e.getMessage());
         }
 
-        return tripService.getTripData(origin, destination, date, budget);
+        try {
+            return tripService.getTripData(origin, destination, date, budget);
+        } catch (Exception e) {
+            System.err.println("Trip search failed hard, returning empty response: " + e.getMessage());
+            TripResponse fallback = new TripResponse();
+            fallback.setFlights(new ArrayList<>());
+            fallback.setHotels(new ArrayList<>());
+            return fallback;
+        }
     }
 }

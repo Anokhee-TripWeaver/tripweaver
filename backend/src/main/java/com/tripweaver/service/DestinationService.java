@@ -9,6 +9,7 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestTemplate;
 
 import com.tripweaver.model.Destination;
@@ -19,7 +20,14 @@ public class DestinationService {
     @Value("${google.places.api.key:}")
     private String googleApiKey;
 
-    private final RestTemplate restTemplate = new RestTemplate();
+    private final RestTemplate restTemplate = buildRestTemplate();
+
+    private RestTemplate buildRestTemplate() {
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(1500);
+        factory.setReadTimeout(2500);
+        return new RestTemplate(factory);
+    }
 
     public List<Destination> searchDestinationsGoogle(String query, String category) {
         try {

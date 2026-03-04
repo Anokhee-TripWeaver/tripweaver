@@ -15,19 +15,21 @@ export default function Wishlist() {
     const [showGallery, setShowGallery] = useState(null);
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
+    const username = sessionStorage.getItem("username");
+    const cartKey = username ? `cart-${username}` : "cart";
+
     useEffect(() => {
         fetchSavedTrips();
     }, []);
 
     const fetchSavedTrips = async () => {
-        const username = sessionStorage.getItem("username");
         if (!username) {
             setSavedTrips([]);
             setLoading(false);
             return;
         }
         try {
-            const res = await axios.get(`${API_BASE}/trip/saved`, {
+            const res = await axios.get(`${API_BASE}/trips/saved`, {
                 params: { username },
                 withCredentials: true
             });
@@ -46,7 +48,7 @@ export default function Wishlist() {
             return;
         }
         try {
-            await axios.delete(`${API_BASE}/trip/saved/${id}`, {
+            await axios.delete(`${API_BASE}/trips/saved/${id}`, {
                 params: { username },
                 withCredentials: true
             });
@@ -172,6 +174,38 @@ export default function Wishlist() {
         }
     };
 
+    const handleAddToCart = (trip) => {
+        if (!username) {
+            alert("Please login to use the cart.");
+            return;
+        }
+
+        const flight = trip.flightDetails ? JSON.parse(trip.flightDetails) : null;
+        const returnFlight = trip.returnFlightDetails ? JSON.parse(trip.returnFlightDetails) : null;
+        const hotel = trip.hotelDetails ? JSON.parse(trip.hotelDetails) : null;
+
+        const cartItem = {
+            id: Date.now(),
+            destination: trip.destination,
+            startDate: trip.startDate,
+            endDate: trip.endDate,
+            totalCost: trip.totalCost,
+            flight: flight,
+            returnFlight: returnFlight,
+            hotel: hotel,
+            nights: calculateNights(trip.startDate, trip.endDate)
+        };
+
+        const existingCart = JSON.parse(localStorage.getItem(cartKey) || "[]");
+        
+        // Optional: Check if already in cart
+        // const alreadyInCart = existingCart.some(item => item.destination === cartItem.destination && item.startDate === cartItem.startDate);
+        // if (alreadyInCart) { alert("This trip is already in your cart!"); return; }
+
+        localStorage.setItem(cartKey, JSON.stringify([...existingCart, cartItem]));
+        alert(`✅ Added ${trip.destination} trip to cart!`);
+    };
+
     return (
         <div style={{
             minHeight: '100vh',
@@ -264,7 +298,14 @@ export default function Wishlist() {
                                             >
                                                 View Details
                                             </button>
-                                            <button onClick={() => handleDelete(trip.id)} style={{ padding: '10px 15px', background: '#ff4444', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
+                                            <button
+                                                onClick={() => handleAddToCart(trip)}
+                                                style={{ padding: '10px 15px', background: '#4CAF50', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
+                                                title="Add to Cart"
+                                            >
+                                                🛒
+                                            </button>
+                                            <button onClick={() => handleDelete(trip.id)} style={{ padding: '10px 15px', background: '#ff4444', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }} title="Delete">
                                                 🗑️
                                             </button>
                                         </div>

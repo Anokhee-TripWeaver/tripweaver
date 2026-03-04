@@ -1,11 +1,14 @@
 package com.tripweaver.config;
 
+import com.tripweaver.service.CustomOAuth2UserService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
@@ -13,18 +16,21 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import java.util.Arrays;
 import java.util.List;
 
 @Configuration
+@EnableWebSecurity
 public class SecurityConfig {
 
-    // ✅ Password Encoder
+    @Autowired
+    private CustomOAuth2UserService customOAuth2UserService;
+
     @Bean
     public BCryptPasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
     }
 
-    // ✅ Authentication Manager (required)
     @Bean
     public AuthenticationManager authenticationManager(
             AuthenticationConfiguration authenticationConfiguration
@@ -32,64 +38,95 @@ public class SecurityConfig {
         return authenticationConfiguration.getAuthenticationManager();
     }
 
-    // ✅ Security Filter Chain
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
-
         http
-            .cors(Customizer.withDefaults())
+            .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .csrf(AbstractHttpConfigurer::disable)
-
             .authorizeHttpRequests(auth -> auth
-                // 🔓 Public endpoints
-                .requestMatchers(
-                    "/api/auth/**",
-                    "/api/trip/**",
-                    "/api/destination/**",
-                    "/api/openai/**",
-                    "/api/gemini/**",
-                    "/api/photo-legacy",
-                    "/oauth2/**",
-                    "/login/**",
-                    "/error"
-                ).permitAll()
+                // Public endpoints
+            		.requestMatchers(
+            			    "/",
+            			    "/api/auth/**",
+            			    "/api/trips/**",                 // fixed
+            			    "/api/destination/**",
+            			    "/api/openai/**",
+            			    "/api/gemini/**",
+            			    "/api/chat/**",
+            			    "/api/photo-legacy",
+            			    "/api/collaboration-trips/**",   // add this
+            			    "/oauth2/**",
+            			    "/login/**",
+            			    "/api/bookings/**",
+            			    "/api/profile/**",
+            			    "/error",
+            			    "/favicon.ico",
+            			    "/static/**",
+            			    "/webjars/**"
+            			).permitAll()
 
-                // 🔐 Everything else requires login
                 .anyRequest().authenticated()
             )
-
-            // ✅ Google OAuth
             .oauth2Login(oauth -> oauth
-                .defaultSuccessUrl(
-                    "http://localhost:3000/oauth-success",
-                    true
+                .userInfoEndpoint(userInfo -> userInfo
+                    .userService(customOAuth2UserService)
                 )
+                .defaultSuccessUrl("http://localhost:3000/oauth-success", true)
+                .failureUrl("http://localhost:3000/login?error=true")
             )
-
-            // ✅ Logout
             .logout(logout -> logout
                 .logoutSuccessUrl("http://localhost:3000/signup")
                 .invalidateHttpSession(true)
                 .clearAuthentication(true)
+                .deleteCookies("JSESSIONID")
             );
 
         return http.build();
     }
 
-    // ✅ CORS Configuration
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
-
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOrigins(List.of("http://localhost:3000"));
-        config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
-        config.setAllowedHeaders(List.of("*"));
+        
+        // Allow frontend on port 3000
+        config.setAllowedOrigins(Arrays.asList(
+            "http://localhost:3000",
+            "http://127.0.0.1:3000"
+        ));
+        
+        // Allow all methods
+        config.setAllowedMethods(Arrays.asList(
+            "GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"
+        ));
+        
+        // Allow all headers
+        config.setAllowedHeaders(Arrays.asList(
+            "Authorization",
+            "Content-Type",
+            "Accept",
+            "X-Requested-With",
+            "Cache-Control",
+            "Origin",
+            "Access-Control-Request-Method",
+            "Access-Control-Request-Headers"
+        ));
+        
+        // Expose headers
+        config.setExposedHeaders(Arrays.asList(
+            "Authorization",
+            "Content-Type",
+            "Access-Control-Allow-Origin",
+            "Access-Control-Allow-Credentials"
+        ));
+        
+        // Allow credentials
         config.setAllowCredentials(true);
-
-        UrlBasedCorsConfigurationSource source =
-                new UrlBasedCorsConfigurationSource();
+        
+        // Cache for 1 hour
+        config.setMaxAge(3600L);
+        
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", config);
-
         return source;
     }
 }

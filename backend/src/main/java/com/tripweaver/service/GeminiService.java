@@ -34,9 +34,9 @@ public class GeminiService {
             destination, startDate, endDate
         );
 
-        // 2. 2026 Stable Endpoints
+        // 2. Stable Endpoints
         String[] modelEndpoints = {
-            "https://generativelanguage.googleapis.com/v1/models/gemini-3-flash:generateContent",
+                        "https://generativelanguage.googleapis.com/v1/models/gemini-3-flash:generateContent",
             "https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash-lite:generateContent",
             "https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent"
         };

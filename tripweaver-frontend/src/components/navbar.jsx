@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { FaHeart, FaShoppingCart } from "react-icons/fa";
 import axios from "axios";
 import "./navbar.css";
+import { persistIdentity, resolveProfileEmail, resolveProfileName } from "../utils/userIdentity";
 
 axios.defaults.withCredentials = true;
 
@@ -21,11 +22,12 @@ export default function Navbar() {
       })
       .then(res => {
         if (res.data.loggedIn) {
+          const resolvedName = resolveProfileName(res.data) || res.data.name;
+          const resolvedEmail = resolveProfileEmail(res.data);
           setIsLoggedIn(true);
-          setUsername(res.data.name);
+          setUsername(resolvedName || "");
 
-          // optional: sync with sessionStorage
-          sessionStorage.setItem("username", res.data.name);
+          persistIdentity({ name: resolvedName, email: resolvedEmail });
         } else {
           fallbackSessionCheck();
         }
@@ -35,7 +37,7 @@ export default function Navbar() {
 
   // 🔹 Fallback: sessionStorage login
   const fallbackSessionCheck = () => {
-    const storedUser = sessionStorage.getItem("username");
+    const storedUser = sessionStorage.getItem("username") || localStorage.getItem("username");
     if (storedUser) {
       setIsLoggedIn(true);
       setUsername(storedUser);
@@ -67,7 +69,8 @@ export default function Navbar() {
         <li onClick={goToSearch}>Destinations</li>
         <li onClick={goToPlanner}>Itinerary Planner</li>
         <li onClick={() => navigate("/trips")}>Trips</li>
-        <li onClick={goToSearch}>Bookings</li>
+        <li onClick={() => navigate("/open-trips")}>Open Trips</li>
+        <li onClick={() => navigate("/bookings")}>Bookings</li>
 
         {/* Icons (only if logged in) */}
         {isLoggedIn && (

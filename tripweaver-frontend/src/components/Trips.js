@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 import Navbar from "./navbar";
+import { useLocation } from "react-router-dom";
 import "./Trips.css";
+import { createJoinRequest } from "../utils/collaboration";
+import { persistIdentity, resolveProfileEmail, resolveProfileName } from "../utils/userIdentity";
 
 const API_BASE = "http://localhost:8090/api";
 
@@ -26,12 +29,44 @@ function Trips() {
     const [step, setStep] = useState(1);
     const [showGallery, setShowGallery] = useState(null);
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
+    const [collabForm, setCollabForm] = useState({
+        hostName: "",
+        hostEmail: "",
+        seatsAvailable: 1,
+        note: ""
+    });
+    const [collaborationPosts, setCollaborationPosts] = useState([]);
+    const [collabMessage, setCollabMessage] = useState("");
+    const [dateErrors, setDateErrors] = useState({
+        startDate: "",
+        endDate: ""
+    });
+    const [popupMessage, setPopupMessage] = useState("");
+    const isValidEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test((value || "").trim());
 
-    const username = sessionStorage.getItem("username");
+    const username = sessionStorage.getItem("username") || localStorage.getItem("username");
+    const [userEmail, setUserEmail] = useState(
+        sessionStorage.getItem("email") || localStorage.getItem("email") || ""
+    );
     const cartKey = username ? `cart-${username}` : "cart";
+    const location = useLocation();
 
-    // Load session data on mount
     useEffect(() => {
+        if (location.state?.restore) {
+            const h = location.state.restore;
+
+            const newFormData = {
+                origin: h.origin || "",
+                destination: h.destination || "",
+                startDate: h.searchDate || "",
+                endDate: "",
+                budget: ""
+            };
+            setFormData(newFormData);
+            setStep(1);
+            return;
+        }
+
         const savedSession = sessionStorage.getItem("trip_session");
         if (savedSession) {
             try {
@@ -49,7 +84,45 @@ function Trips() {
         }
     }, []);
 
-    // Save session data whenever state changes
+    useEffect(() => {
+        fetchCollaborationPosts();
+        const reloadPosts = () => fetchCollaborationPosts();
+        window.addEventListener("storage", reloadPosts);
+        window.addEventListener("trip-collaboration-posts-updated", reloadPosts);
+        return () => {
+            window.removeEventListener("storage", reloadPosts);
+            window.removeEventListener("trip-collaboration-posts-updated", reloadPosts);
+        };
+    }, []);
+
+    useEffect(() => {
+        const savedEmail = sessionStorage.getItem("email") || "";
+        if (isValidEmail(savedEmail)) {
+            setUserEmail(savedEmail);
+            return;
+        }
+
+        axios.get(`${API_BASE}/profile`, { withCredentials: true })
+            .then((res) => {
+                const profileEmail = resolveProfileEmail(res?.data);
+                const profileName = resolveProfileName(res?.data);
+                if (isValidEmail(profileEmail)) {
+                    persistIdentity({ name: profileName, email: profileEmail });
+                    setUserEmail(profileEmail);
+                }
+            })
+            .catch(() => {});
+    }, []);
+
+    useEffect(() => {
+        setCollabForm({
+            hostName: username || "",
+            hostEmail: userEmail || "",
+            seatsAvailable: 1,
+            note: ""
+        });
+    }, [username, userEmail]);
+
     useEffect(() => {
         const sessionData = {
             formData,
@@ -63,7 +136,6 @@ function Trips() {
         sessionStorage.setItem("trip_session", JSON.stringify(sessionData));
     }, [formData, trip, selectedFlight, selectedReturnFlight, selectedHotel, returnFlights, step]);
 
-    // Clear comparison list and modal whenever step changes
     useEffect(() => {
         setCompareList([]);
         setShowCompareModal(false);
@@ -71,7 +143,6 @@ function Trips() {
 
     const handleFlightSelect = (flight) => {
         setSelectedFlight(flight);
-        // Reset subsequent steps when changing flight
         setSelectedHotel(null);
         setSelectedReturnFlight(null);
         setStep(2);
@@ -92,12 +163,10 @@ function Trips() {
 
     const handleHotelSelect = async (hotel) => {
         setSelectedHotel(hotel);
-        // Reset subsequent step when changing hotel
         setSelectedReturnFlight(null);
         setLoading(true);
         try {
-            // Fetch return flights
-            const res = await axios.get(`${API_BASE}/trip/search`, {
+            const res = await axios.get(`${API_BASE}/trips/search`, {
                 params: {
                     origin: formData.destination.trim().toUpperCase(),
                     destination: formData.origin.trim().toUpperCase(),
@@ -106,7 +175,9 @@ function Trips() {
                 },
                 withCredentials: true,
             });
-            const flights = res.data?.flights || [];
+            const flights = Array.isArray(res.data?.flights)
+                ? res.data.flights
+                : [];
             if (flights.length === 0) {
                  setReturnFlights(mockFlights(formData.destination, formData.origin, formData.endDate));
             } else {
@@ -121,7 +192,6 @@ function Trips() {
         }
     };
 
-    // Add or toggle an item in the comparison list (max 2, same type only)
     const addToCompare = (item, type) => {
         const existingIndex = compareList.findIndex(
             i =>
@@ -131,7 +201,6 @@ function Trips() {
                     (i.name && item.name && i.name === item.name))
         );
 
-        // If already selected, remove it (toggle off)
         if (existingIndex !== -1) {
             const updated = [...compareList];
             updated.splice(existingIndex, 1);
@@ -139,13 +208,11 @@ function Trips() {
             return;
         }
 
-        // If there is an item of a different type, block mixing flights and hotels
         if (compareList.length > 0 && compareList[0].type !== type) {
             alert("You can only compare flights with flights or hotels with hotels.");
             return;
         }
 
-        // Enforce max of 2 items
         if (compareList.length >= 2) {
             alert("You can compare up to 2 options at a time.");
             return;
@@ -154,7 +221,6 @@ function Trips() {
         setCompareList([...compareList, { ...item, type }]);
     };
 
-    // Open the comparison modal only when exactly two options are selected
     const openCompareModal = () => {
         if (compareList.length !== 2) {
             alert("Select exactly two options to compare.");
@@ -217,8 +283,52 @@ function Trips() {
         }
     };
 
+    const getTodayDateString = () => {
+        const d = new Date();
+        d.setHours(0, 0, 0, 0);
+        return d.toISOString().slice(0, 10);
+    };
+
+    const isPastDate = (dateStr) => {
+        if (!dateStr) return false;
+        const selected = new Date(dateStr);
+        selected.setHours(0, 0, 0, 0);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        return selected < today;
+    };
+
+    const validateDates = (nextFormData) => {
+        const errors = { startDate: "", endDate: "" };
+        const { startDate, endDate } = nextFormData;
+
+        if (isPastDate(startDate)) {
+            errors.startDate = "Departure date cannot be in the past.";
+        }
+        if (isPastDate(endDate)) {
+            errors.endDate = "Return date cannot be in the past.";
+        }
+        if (startDate && endDate) {
+            const start = new Date(startDate);
+            const end = new Date(endDate);
+            if (end < start) {
+                errors.endDate = "Return date cannot be before departure date.";
+            }
+        }
+        return errors;
+    };
+
+    const hasDateErrors = (errors) => Boolean(errors.startDate || errors.endDate);
+
+    const showPopup = (message) => {
+        setPopupMessage(message);
+        window.setTimeout(() => setPopupMessage(""), 2600);
+    };
+
     const handleInputChange = (e) => {
-        setFormData({ ...formData, [e.target.name]: e.target.value });
+        const nextFormData = { ...formData, [e.target.name]: e.target.value };
+        setFormData(nextFormData);
+        setDateErrors(validateDates(nextFormData));
     };
 
     const mockFlights = (o, d, dt) => {
@@ -235,6 +345,13 @@ function Trips() {
         }));
     };
 
+    const isFutureFlight = (flight) => {
+        if (!flight?.departureTime) return false;
+        const departure = new Date(flight.departureTime);
+        if (isNaN(departure)) return false;
+        return departure.getTime() >= Date.now();
+    };
+
     const handleSearch = async (e) => {
         e.preventDefault();
         const { origin, destination, startDate, endDate, budget } = formData;
@@ -244,18 +361,12 @@ function Trips() {
             return;
         }
 
-        const start = new Date(startDate);
-        const end = new Date(endDate);
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-
-        if (start < today) {
-            setError("Departure date cannot be in the past.");
-            return;
-        }
-
-        if (end < start) {
-            setError("Return date cannot be before departure date.");
+        const computedDateErrors = validateDates(formData);
+        setDateErrors(computedDateErrors);
+        if (hasDateErrors(computedDateErrors)) {
+            const firstError = computedDateErrors.startDate || computedDateErrors.endDate;
+            setError(firstError);
+            showPopup(firstError);
             return;
         }
 
@@ -267,7 +378,7 @@ function Trips() {
         setLoading(true);
 
         try {
-            const res = await axios.get(`${API_BASE}/trip/search`, {
+            const res = await axios.get(`${API_BASE}/trips/search`, {
                 params: {
                     origin: origin.trim().toUpperCase(),
                     destination: destination.trim(),
@@ -277,16 +388,17 @@ function Trips() {
                 withCredentials: true,
             });
 
-            const flights = res.data?.flights || [];
-            const hotels = res.data?.hotels || [];
+            const flights = (Array.isArray(res.data?.flights) ? res.data.flights : []).filter(isFutureFlight);
+            const hotels = Array.isArray(res.data?.hotels) ? res.data.hotels : [];
 
             if (flights.length === 0 && hotels.length === 0) {
-                setInfo("No results found for your specific budget/dates.");
+                setTrip({ flights: mockFlights(origin, destination, startDate).filter(isFutureFlight), hotels: [] });
+                setInfo("Search API returned no flight/hotel payload. Showing sample flight data.");
+                return;
             }
             setTrip({ flights, hotels });
         } catch (err) {
-            // Fallback for demo/dev purposes
-            setTrip({ flights: mockFlights(origin, destination, startDate), hotels: [] });
+            setTrip({ flights: mockFlights(origin, destination, startDate).filter(isFutureFlight), hotels: [] });
             setInfo("Note: Showing sample flight data (API Offline).");
         } finally {
             setLoading(false);
@@ -304,11 +416,9 @@ function Trips() {
 
     const parsePrice = (priceStr) => {
         if (!priceStr) return 0;
-        // Remove " INR" or other currency and commas
         return parseFloat(priceStr.replace(/[^0-9.]/g, ""));
     };
 
-    // Compute total cost of the currently selected trip (used for budget tracker)
     const getTotalCost = () => {
         let total = 0;
         if (selectedFlight) {
@@ -323,13 +433,11 @@ function Trips() {
         return total;
     };
 
-    // Remaining budget after current selections
     const getRemainingBudget = () => {
         const budget = parseFloat(formData.budget) || 0;
         return budget - getTotalCost();
     };
 
-    // Helper to compute total duration in minutes for a flight
     const getFlightDurationMinutes = (flight) => {
         if (!flight || !flight.departureTime || !flight.arrivalTime) return null;
         const dep = new Date(flight.departureTime);
@@ -339,7 +447,6 @@ function Trips() {
         return Math.round(diffMs / (1000 * 60));
     };
 
-    // Pretty label like "3h 45m" from minutes
     const formatDuration = (minutes) => {
         if (minutes == null) return "N/A";
         const h = Math.floor(minutes / 60);
@@ -349,7 +456,6 @@ function Trips() {
         return `${h}h ${m}m`;
     };
 
-    // Total cost contribution of a single option being compared
     const getOptionTotalCost = (item, type) => {
         if (!item) return 0;
         if (type === "flight") {
@@ -361,15 +467,12 @@ function Trips() {
         return 0;
     };
 
-    // Base cost from already selected parts of the trip (excluding the option we are evaluating)
     const getBaseCostForComparison = (type) => {
         const budget = parseFloat(formData.budget) || 0;
         if (!budget) return 0;
 
         let base = 0;
         if (type === "flight") {
-            // For outbound comparison (step 1) there is nothing selected yet
-            // For return comparison (step 3) user already chose outbound flight and hotel
             if (step >= 2 && selectedFlight) {
                 base += parsePrice(selectedFlight.price);
             }
@@ -377,7 +480,6 @@ function Trips() {
                 base += selectedHotel.price * calculateNights();
             }
         } else if (type === "hotel") {
-            // When comparing hotels (step 2) outbound flight is already fixed
             if (selectedFlight) {
                 base += parsePrice(selectedFlight.price);
             }
@@ -385,7 +487,6 @@ function Trips() {
         return base;
     };
 
-    // Check if picking this option would breach the overall budget
     const isOptionOverBudget = (item, type) => {
         const budget = parseFloat(formData.budget) || 0;
         if (!budget) return false;
@@ -396,11 +497,11 @@ function Trips() {
     const handleAddToCart = () => {
         const total = getTotalCost();
         const budget = parseFloat(formData.budget) || 0;
-        
+
         if (total > budget) {
             alert(`⚠️ Warning: Your total trip cost (₹${total}) exceeds your budget (₹${budget})!`);
         }
-        
+
         const cartItem = {
             id: Date.now(),
             destination: formData.destination,
@@ -430,10 +531,11 @@ function Trips() {
                 flightDetails: JSON.stringify(selectedFlight),
                 returnFlightDetails: selectedReturnFlight ? JSON.stringify(selectedReturnFlight) : null,
                 hotelDetails: JSON.stringify(selectedHotel),
-                username
+                username,
+                email: userEmail
             };
 
-            await axios.post(`${API_BASE}/trip/save`, tripData, { withCredentials: true });
+            await axios.post(`${API_BASE}/trips/save`, tripData, { withCredentials: true });
             alert("Trip saved successfully to your wishlist!");
         } catch (err) {
             console.error(err);
@@ -448,10 +550,199 @@ function Trips() {
         return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
     };
 
+    const getCostPerPerson = (totalCost, seatsAvailable) => {
+        const seatCount = Math.max(1, Number(seatsAvailable) || 1);
+        return Math.ceil(totalCost / (seatCount + 1));
+    };
+
+    const getLocalCollaborationPosts = () => {
+        const savedPosts = localStorage.getItem("trip_collaboration_posts");
+        if (!savedPosts) return [];
+        try {
+            const parsed = JSON.parse(savedPosts);
+            return Array.isArray(parsed) ? parsed : [];
+        } catch {
+            return [];
+        }
+    };
+
+    const saveLocalCollaborationPosts = (posts) => {
+        localStorage.setItem("trip_collaboration_posts", JSON.stringify(posts));
+    };
+
+    const sortPostsByCreatedAt = (posts) =>
+        [...posts].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+
+    const fetchCollaborationPosts = async () => {
+        try {
+            const res = await axios.get(`${API_BASE}/collaboration-trips`, { withCredentials: true });
+            const posts = (Array.isArray(res.data) ? res.data : []).filter(
+                (post) => isValidEmail(post.hostEmail || post.email) && (Number(post.seatsAvailable) || 0) > 0
+            );
+            setCollaborationPosts(sortPostsByCreatedAt(posts));
+        } catch (err) {
+            const localPosts = getLocalCollaborationPosts();
+            const filteredLocal = localPosts.filter(
+                (post) => isValidEmail(post.hostEmail || post.email) && (Number(post.seatsAvailable) || 0) > 0
+            );
+            if (filteredLocal.length !== localPosts.length) {
+                saveLocalCollaborationPosts(filteredLocal);
+            }
+            setCollaborationPosts(sortPostsByCreatedAt(filteredLocal));
+        }
+    };
+
+    const handlePublishCollaboration = async () => {
+        const totalCost = getTotalCost();
+        const normalizedHostEmail = (userEmail || collabForm.hostEmail || "").trim().toLowerCase();
+        if (!selectedFlight || !selectedHotel || !formData.destination || !formData.startDate || !formData.endDate) {
+            setCollabMessage("Please finish your trip selection before publishing.");
+            return;
+        }
+        if (!normalizedHostEmail) {
+            setCollabMessage("Your account email is required so requests reach your profile.");
+            return;
+        }
+        if (!isValidEmail(normalizedHostEmail)) {
+            setCollabMessage("Please enter a valid host email (example: name@gmail.com).");
+            return;
+        }
+
+        const openTripPayload = {
+            destination: formData.destination,
+            startDate: formData.startDate,
+            endDate: formData.endDate,
+            totalCost,
+            budget: parseFloat(formData.budget),
+            flightDetails: JSON.stringify(selectedFlight),
+            returnFlightDetails: selectedReturnFlight ? JSON.stringify(selectedReturnFlight) : null,
+            hotelDetails: JSON.stringify(selectedHotel),
+            username: collabForm.hostName || username || "Traveler",
+            email: normalizedHostEmail,
+            openTrip: true,
+            seatsAvailable: Math.max(1, Math.min(10, Number(collabForm.seatsAvailable) || 1)),
+            note: collabForm.note || ""
+        };
+
+        try {
+            await axios.post(`${API_BASE}/trips/save`, openTripPayload, { withCredentials: true });
+            await fetchCollaborationPosts();
+            setCollabMessage("Trip published. Other travelers can now request to join by email.");
+        } catch (err) {
+            const localPost = {
+                id: Date.now(),
+                hostName: openTripPayload.username,
+                hostEmail: openTripPayload.email,
+                origin: formData.origin,
+                destination: openTripPayload.destination,
+                startDate: openTripPayload.startDate,
+                endDate: openTripPayload.endDate,
+                totalCost: openTripPayload.totalCost,
+                seatsAvailable: openTripPayload.seatsAvailable,
+                note: openTripPayload.note,
+                flightDetails: openTripPayload.flightDetails,
+                returnFlightDetails: openTripPayload.returnFlightDetails,
+                hotelDetails: openTripPayload.hotelDetails,
+                createdAt: new Date().toISOString()
+            };
+            const localPosts = sortPostsByCreatedAt([localPost, ...getLocalCollaborationPosts()]);
+            saveLocalCollaborationPosts(localPosts);
+            setCollaborationPosts(localPosts);
+            setCollabMessage("Published locally. Backend sync is not available right now.");
+        }
+    };
+
+    const getTimeText = (dateTime) => dateTime?.split('T')[1]?.slice(0, 5) || dateTime?.split(' ')[1] || "";
+
+    const sectionStyle = { width: '100%', maxWidth: '800px', margin: '0 auto' };
+    const backBtnStyle = { marginBottom: '20px', padding: '8px 15px', background: '#ddd', border: 'none', borderRadius: '4px', cursor: 'pointer' };
+    const flightFooterStyle = { marginTop: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' };
+    const compareLabelStyle = { fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '4px' };
+    const primaryFlightBtnStyle = { padding: '8px 20px', backgroundColor: '#2196F3', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' };
+
+    const handleRequestToJoin = async (post) => {
+        const hostEmail = post.hostEmail || post.email || "";
+        const requesterEmail = userEmail || "";
+        const isValidEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test((value || "").trim());
+
+        if (!hostEmail) {
+            alert("Host email is missing for this trip.");
+            return;
+        }
+        if (!isValidEmail(hostEmail)) {
+            alert("Host email is invalid. Ask host to publish with a valid email.");
+            return;
+        }
+        if (!isValidEmail(requesterEmail)) {
+            alert("Your account email is invalid. Please update your email and try again.");
+            return;
+        }
+        if ((hostEmail || "").toLowerCase() === requesterEmail.toLowerCase()) {
+            alert("You cannot request to join your own trip.");
+            return;
+        }
+
+        try {
+            await axios.post(
+                `${API_BASE}/collaboration-trips/join-requests`,
+                {
+                    postId: Number(post.id) || null,
+                    destination: post.destination,
+                    startDate: post.startDate,
+                    endDate: post.endDate,
+                    hostName: post.hostName || "Trip Host",
+                    hostEmail,
+                    requesterName: username || "TripWeaver User",
+                    requesterEmail,
+                    status: "PENDING",
+                },
+                { withCredentials: true }
+            );
+
+            const requestResult = createJoinRequest({
+                post: { ...post, hostEmail },
+                requesterName: username || "TripWeaver User",
+                requesterEmail
+            });
+            if (!requestResult.created && requestResult.reason === "DUPLICATE_PENDING") {
+                alert("You already sent a pending request for this trip.");
+                return;
+            }
+        } catch {
+            const requestResult = createJoinRequest({
+                post: { ...post, hostEmail },
+                requesterName: username || "TripWeaver User",
+                requesterEmail
+            });
+            if (!requestResult.created && requestResult.reason === "DUPLICATE_PENDING") {
+                alert("You already sent a pending request for this trip.");
+                return;
+            }
+        }
+
+        try {
+            const payload = {
+                toEmail: hostEmail,
+                hostName: post.hostName || "Trip Host",
+                requesterName: username || "TripWeaver User",
+                requesterEmail,
+                destination: post.destination,
+                startDate: post.startDate,
+                endDate: post.endDate
+            };
+
+            await axios.post(`${API_BASE}/collaboration-trips/send-join-request-email`, payload, { withCredentials: true });
+            alert("Join request email sent to host.");
+        } catch (err) {
+            console.error("Failed to send join request", err);
+            alert("Failed to send join request email. Please try again.");
+        }
+    };
+
     return (
         <div className="trips-page">
             <Navbar />
-            
+
             {/* Budget Tracker */}
             {formData.budget && (
                 <div className="budget-tracker" style={{
@@ -489,7 +780,7 @@ function Trips() {
                     right: '20px',
                     zIndex: 1000
                 }}>
-                    <button 
+                    <button
                         onClick={openCompareModal}
                         disabled={compareList.length !== 2}
                         style={{
@@ -528,7 +819,6 @@ function Trips() {
                         {compareList.length === 2 && (
                             <>
                                 {compareList[0].type === "flight" ? (
-                                    // Flights comparison table
                                     <div>
                                         <div style={{ marginBottom: '10px', fontSize: '0.9rem', color: '#555' }}>
                                             Comparing flights based on price, duration, stops, airline and departure time.
@@ -610,7 +900,6 @@ function Trips() {
                                         </div>
                                     </div>
                                 ) : (
-                                    // Hotels comparison table
                                     <div>
                                         <div style={{ marginBottom: '10px', fontSize: '0.9rem', color: '#555' }}>
                                             Comparing hotels based on price per night, rating, location and amenities.
@@ -708,11 +997,27 @@ function Trips() {
                     <div className="input-row">
                         <div className="field">
                             <label>Departure</label>
-                            <input name="startDate" type="date" value={formData.startDate} onChange={handleInputChange} />
+                            <input
+                                name="startDate"
+                                type="date"
+                                min={getTodayDateString()}
+                                value={formData.startDate}
+                                onChange={handleInputChange}
+                                style={dateErrors.startDate ? { borderColor: "#dc2626", boxShadow: "0 0 0 1px #dc2626" } : undefined}
+                            />
+                            {dateErrors.startDate && <small style={{ color: "#fecaca", fontWeight: 700 }}>{dateErrors.startDate}</small>}
                         </div>
                         <div className="field">
                             <label>Return</label>
-                            <input name="endDate" type="date" value={formData.endDate} onChange={handleInputChange} />
+                            <input
+                                name="endDate"
+                                type="date"
+                                min={formData.startDate || getTodayDateString()}
+                                value={formData.endDate}
+                                onChange={handleInputChange}
+                                style={dateErrors.endDate ? { borderColor: "#dc2626", boxShadow: "0 0 0 1px #dc2626" } : undefined}
+                            />
+                            {dateErrors.endDate && <small style={{ color: "#fecaca", fontWeight: 700 }}>{dateErrors.endDate}</small>}
                         </div>
                         <div className="field">
                             <label>Total Budget</label>
@@ -724,8 +1029,44 @@ function Trips() {
                     </button>
                 </form>
 
+                <section className="companions-board">
+                    <div className="companions-board-header">
+                        <h3>Travel Companions</h3>
+                        <p>See trips that are open for outsiders to join and split costs.</p>
+                    </div>
+                    {collaborationPosts.length === 0 ? (
+                        <p className="companions-empty">No open collaboration trips yet. Publish one from Step 4 summary.</p>
+                    ) : (
+                        <div className="companions-list">
+                            {collaborationPosts.map((post) => {
+                                return (
+                                    <article className="companions-card" key={post.id}>
+                                        <div className="companions-top">
+                                            <strong>{post.origin ? `${post.origin} to ${post.destination}` : post.destination}</strong>
+                                            <span>{post.startDate} to {post.endDate}</span>
+                                        </div>
+                                        <p className="companions-meta">
+                                            Host: {post.hostName} | Seats open: {post.seatsAvailable}
+                                        </p>
+                                        <p className="companions-meta">
+                                            Total cost: Rs.{post.totalCost} | Approx per person: Rs.{getCostPerPerson(post.totalCost, post.seatsAvailable)}
+                                        </p>
+                                        {post.note && <p className="companions-note">{post.note}</p>}
+                                        <div className="companions-actions">
+                                            <button className="request-btn" onClick={() => handleRequestToJoin(post)}>
+                                                Request to Join
+                                            </button>
+                                        </div>
+                                    </article>
+                                );
+                            })}
+                        </div>
+                    )}
+                </section>
+
                 {error && <div className="msg-box error">{error}</div>}
                 {info && <div className="msg-box info">{info}</div>}
+                {popupMessage && <div className="date-popup">{popupMessage}</div>}
 
                 {/* Progress Bar */}
                 {trip && (
@@ -745,11 +1086,11 @@ function Trips() {
                         <>
                             {/* Step 1: Flights */}
                             {step === 1 && (
-                                <section className="results-column" style={{ width: '100%', maxWidth: '800px', margin: '0 auto' }}>
+                                <section className="results-column" style={sectionStyle}>
                                     <h3 className="section-title">✈️ Step 1: Select Flight</h3>
-                                    {trip.flights.map((f, i) => (
-                                        <div 
-                                            key={i} 
+                                    {trip.flights.filter(isFutureFlight).map((f, i) => (
+                                        <div
+                                            key={i}
                                             className={`trip-card flight`}
                                             style={{ marginBottom: '15px' }}
                                         >
@@ -759,21 +1100,21 @@ function Trips() {
                                             </div>
                                             <div className="flight-route">
                                                 <div className="route-point">
-                                                    <strong>{f.departureTime.split('T')[1]?.slice(0,5) || f.departureTime.split(' ')[1]}</strong>
+                                                    <strong>{getTimeText(f.departureTime)}</strong>
                                                     <span>{f.departureAirport}</span>
                                                 </div>
                                                 <div className="route-line">✈️</div>
                                                 <div className="route-point">
-                                                    <strong>{f.arrivalTime.split('T')[1]?.slice(0,5) || f.arrivalTime.split(' ')[1]}</strong>
+                                                    <strong>{getTimeText(f.arrivalTime)}</strong>
                                                     <span>{f.arrivalAirport}</span>
                                                 </div>
                                             </div>
-                                            <div className="flight-footer" style={{ marginTop: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                            <div className="flight-footer" style={flightFooterStyle}>
                                                 <span className="price" style={{ fontWeight: 'bold', color: '#333' }}>
                                                     {f.price}
                                                 </span>
                                                 <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                                                    <label style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                    <label style={compareLabelStyle}>
                                                         <input
                                                             type="checkbox"
                                                             checked={compareList.some(c => c.type === 'flight' && c.flightNumber === f.flightNumber)}
@@ -781,10 +1122,10 @@ function Trips() {
                                                         />
                                                         Compare
                                                     </label>
-                                                    <button 
+                                                    <button
                                                         className="select-btn"
                                                         onClick={() => handleFlightSelect(f)}
-                                                        style={{ padding: '8px 20px', backgroundColor: '#2196F3', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                                                        style={primaryFlightBtnStyle}
                                                     >
                                                         Select Flight & Continue
                                                     </button>
@@ -797,27 +1138,27 @@ function Trips() {
 
                             {/* Step 2: Hotels */}
                             {step === 2 && (
-                                <section className="results-column" style={{ width: '100%', maxWidth: '800px', margin: '0 auto' }}>
-                                    <button 
+                                <section className="results-column" style={sectionStyle}>
+                                    <button
                                         onClick={() => setStep(1)}
-                                        style={{ marginBottom: '20px', padding: '8px 15px', background: '#ddd', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                                        style={backBtnStyle}
                                     >
                                         ← Back to Flights
                                     </button>
                                     <h3 className="section-title">🏨 Step 2: Select Hotel</h3>
                                     {trip.hotels.map((h, i) => (
-                                        <div 
-                                            key={i} 
+                                        <div
+                                            key={i}
                                             className={`trip-card hotel`}
                                             style={{ marginBottom: '20px' }}
                                         >
                                             <div style={{ position: 'relative' }}>
-                                                <img 
-                                                    src={(h.photoUrls && h.photoUrls.length > 0 ? h.photoUrls[0] : h.photoUrl) || `https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=800&q=60`} 
+                                                <img
+                                                    src={(h.photoUrls && h.photoUrls.length > 0 ? h.photoUrls[0] : h.photoUrl) || `https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=800&q=60`}
                                                     alt={h.name}
-                                                    style={{ width: '100%', height: '200px', objectFit: 'cover', borderRadius: '12px', marginBottom: '10px' }} 
+                                                    style={{ width: '100%', height: '200px', objectFit: 'cover', borderRadius: '12px', marginBottom: '10px' }}
                                                 />
-                                                <button 
+                                                <button
                                                     onClick={(e) => { e.stopPropagation(); openGallery(h); }}
                                                     style={{
                                                         position: 'absolute', bottom: '20px', right: '10px',
@@ -831,7 +1172,7 @@ function Trips() {
                                             <h4>{h.name}</h4>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
                                                 <p className="addr" style={{ margin: 0 }}>📍 {h.address}</p>
-                                                <button 
+                                                <button
                                                     onClick={(e) => {
                                                         e.stopPropagation();
                                                         const url = buildMapsUrl(h);
@@ -862,7 +1203,7 @@ function Trips() {
                                                 </div>
                                             </div>
                                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '10px' }}>
-                                                <label style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                <label style={compareLabelStyle}>
                                                     <input
                                                         type="checkbox"
                                                         checked={compareList.some(c => c.type === 'hotel' && c.name === h.name)}
@@ -870,7 +1211,7 @@ function Trips() {
                                                     />
                                                     Compare
                                                 </label>
-                                                <button 
+                                                <button
                                                     className="select-btn"
                                                     onClick={() => handleHotelSelect(h)}
                                                     style={{ padding: '10px 20px', backgroundColor: '#4CAF50', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
@@ -885,17 +1226,17 @@ function Trips() {
 
                             {/* Step 3: Return Flight */}
                             {step === 3 && (
-                                <section className="results-column" style={{ width: '100%', maxWidth: '800px', margin: '0 auto' }}>
-                                    <button 
+                                <section className="results-column" style={sectionStyle}>
+                                    <button
                                         onClick={() => setStep(2)}
-                                        style={{ marginBottom: '20px', padding: '8px 15px', background: '#ddd', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                                        style={backBtnStyle}
                                     >
                                         ← Back to Hotels
                                     </button>
                                     <h3 className="section-title">✈️ Step 3: Select Return Flight (Optional)</h3>
-                                    
+
                                     <div style={{ marginBottom: '20px', textAlign: 'center' }}>
-                                        <button 
+                                        <button
                                             onClick={handleSkipReturnFlight}
                                             style={{ padding: '10px 30px', background: '#757575', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '1.1rem' }}
                                         >
@@ -903,9 +1244,9 @@ function Trips() {
                                         </button>
                                     </div>
 
-                                    {returnFlights.map((f, i) => (
-                                        <div 
-                                            key={i} 
+                                    {returnFlights.filter(isFutureFlight).map((f, i) => (
+                                        <div
+                                            key={i}
                                             className={`trip-card flight`}
                                             style={{ marginBottom: '15px' }}
                                         >
@@ -915,21 +1256,21 @@ function Trips() {
                                             </div>
                                             <div className="flight-route">
                                                 <div className="route-point">
-                                                    <strong>{f.departureTime.split('T')[1]?.slice(0,5) || f.departureTime.split(' ')[1]}</strong>
+                                                    <strong>{getTimeText(f.departureTime)}</strong>
                                                     <span>{f.departureAirport}</span>
                                                 </div>
                                                 <div className="route-line">✈️</div>
                                                 <div className="route-point">
-                                                    <strong>{f.arrivalTime.split('T')[1]?.slice(0,5) || f.arrivalTime.split(' ')[1]}</strong>
+                                                    <strong>{getTimeText(f.arrivalTime)}</strong>
                                                     <span>{f.arrivalAirport}</span>
                                                 </div>
                                             </div>
-                                            <div className="flight-footer" style={{ marginTop: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                            <div className="flight-footer" style={flightFooterStyle}>
                                                 <span className="price" style={{ fontWeight: 'bold', color: '#333' }}>
                                                     {f.price}
                                                 </span>
                                                 <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                                                    <label style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                    <label style={compareLabelStyle}>
                                                         <input
                                                             type="checkbox"
                                                             checked={compareList.some(c => c.type === 'flight' && c.flightNumber === f.flightNumber)}
@@ -937,10 +1278,10 @@ function Trips() {
                                                         />
                                                         Compare
                                                     </label>
-                                                    <button 
+                                                    <button
                                                         className="select-btn"
                                                         onClick={() => handleReturnFlightSelect(f)}
-                                                        style={{ padding: '8px 20px', backgroundColor: '#2196F3', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                                                        style={primaryFlightBtnStyle}
                                                     >
                                                         Select Return Flight
                                                     </button>
@@ -953,10 +1294,10 @@ function Trips() {
 
                             {/* Step 4: Summary */}
                             {step === 4 && selectedFlight && selectedHotel && (
-                                <section className="results-column" style={{ width: '100%', maxWidth: '800px', margin: '0 auto' }}>
-                                    <button 
+                                <section className="results-column" style={sectionStyle}>
+                                    <button
                                         onClick={() => setStep(3)}
-                                        style={{ marginBottom: '20px', padding: '8px 15px', background: '#ddd', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                                        style={backBtnStyle}
                                     >
                                         ← Back to Return Flight
                                     </button>
@@ -966,7 +1307,7 @@ function Trips() {
                                         <div style={{ margin: '10px 0' }}>
                                             <p><strong>Airline:</strong> {selectedFlight.airline} ({selectedFlight.flightNumber})</p>
                                             <p><strong>Route:</strong> {selectedFlight.departureAirport} ➝ {selectedFlight.arrivalAirport}</p>
-                                            <p><strong>Time:</strong> {selectedFlight.departureTime.split('T')[1]?.slice(0,5)} - {selectedFlight.arrivalTime.split('T')[1]?.slice(0,5)}</p>
+                                            <p><strong>Time:</strong> {getTimeText(selectedFlight.departureTime)} - {getTimeText(selectedFlight.arrivalTime)}</p>
                                             <p><strong>Price:</strong> {selectedFlight.price}</p>
                                         </div>
 
@@ -976,7 +1317,7 @@ function Trips() {
                                                 <div style={{ margin: '10px 0' }}>
                                                     <p><strong>Airline:</strong> {selectedReturnFlight.airline} ({selectedReturnFlight.flightNumber})</p>
                                                     <p><strong>Route:</strong> {selectedReturnFlight.departureAirport} ➝ {selectedReturnFlight.arrivalAirport}</p>
-                                                    <p><strong>Time:</strong> {selectedReturnFlight.departureTime.split('T')[1]?.slice(0,5)} - {selectedReturnFlight.arrivalTime.split('T')[1]?.slice(0,5)}</p>
+                                                    <p><strong>Time:</strong> {getTimeText(selectedReturnFlight.departureTime)} - {getTimeText(selectedReturnFlight.arrivalTime)}</p>
                                                     <p><strong>Price:</strong> {selectedReturnFlight.price}</p>
                                                 </div>
                                             </>
@@ -984,10 +1325,10 @@ function Trips() {
 
                                         <h4 style={{ borderBottom: '1px solid #eee', paddingBottom: '10px', marginTop: '20px' }}>Hotel Details</h4>
                                         <div style={{ margin: '10px 0' }}>
-                                            <img 
-                                                src={selectedHotel.photoUrl || `https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=800&q=60`} 
+                                            <img
+                                                src={selectedHotel.photoUrl || `https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=800&q=60`}
                                                 alt={selectedHotel.name}
-                                                style={{ width: '100%', height: '150px', objectFit: 'cover', borderRadius: '8px', marginBottom: '10px' }} 
+                                                style={{ width: '100%', height: '150px', objectFit: 'cover', borderRadius: '8px', marginBottom: '10px' }}
                                             />
                                             <p><strong>Hotel:</strong> {selectedHotel.name}</p>
                                             <p><strong>Address:</strong> {selectedHotel.address}</p>
@@ -1014,20 +1355,60 @@ function Trips() {
                                         </div>
 
                                         <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
-                                            <button 
+                                            <button
                                                 className="select-btn"
                                                 onClick={handleAddToCart}
                                                 style={{ flex: 1, padding: '12px', backgroundColor: '#FF9800', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '1rem' }}
                                             >
                                                 Add to Cart
                                             </button>
-                                            <button 
+                                            <button
                                                 className="select-btn"
                                                 onClick={handleSaveTrip}
                                                 style={{ flex: 1, padding: '12px', backgroundColor: '#4CAF50', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '1rem' }}
                                             >
                                                 ❤️ Save Trip
                                             </button>
+                                        </div>
+
+                                        <div className="collab-panel">
+                                            <h4>Open This Trip For Companions</h4>
+                                            <p>Publish this trip so others can request to join and share expenses.</p>
+                                            <div className="collab-grid">
+                                                <input
+                                                    type="text"
+                                                    placeholder="Your name"
+                                                    value={collabForm.hostName}
+                                                    onChange={(e) => setCollabForm({ ...collabForm, hostName: e.target.value })}
+                                                />
+                                                <input
+                                                    type="email"
+                                                    placeholder="Your account email"
+                                                    value={userEmail || collabForm.hostEmail}
+                                                    readOnly
+                                                    title="Requests are matched to your logged-in account email"
+                                                />
+                                                <input
+                                                    type="number"
+                                                    min="1"
+                                                    max="10"
+                                                    placeholder="Seats available"
+                                                    value={collabForm.seatsAvailable}
+                                                    onChange={(e) => setCollabForm({ ...collabForm, seatsAvailable: e.target.value })}
+                                                />
+                                            </div>
+                                            <textarea
+                                                placeholder="Optional note: vibe, preferences, safety expectations..."
+                                                value={collabForm.note}
+                                                onChange={(e) => setCollabForm({ ...collabForm, note: e.target.value })}
+                                            />
+                                            <p className="collab-cost">
+                                                Estimated split: Rs.{getCostPerPerson(getTotalCost(), collabForm.seatsAvailable)} per person
+                                            </p>
+                                            <button type="button" className="publish-btn" onClick={handlePublishCollaboration}>
+                                                Publish Open-to-Join Trip
+                                            </button>
+                                            {collabMessage && <p className="collab-message">{collabMessage}</p>}
                                         </div>
                                     </div>
                                 </section>
@@ -1043,7 +1424,7 @@ function Trips() {
                         background: 'rgba(0,0,0,0.9)', zIndex: 1000, display: 'flex', justifyContent: 'center', alignItems: 'center'
                     }}>
                         <div style={{ position: 'relative', width: '90%', maxWidth: '1000px', height: '80%' }}>
-                            <button 
+                            <button
                                 onClick={closeGallery}
                                 style={{
                                     position: 'absolute', top: '-40px', right: '0',
@@ -1052,22 +1433,22 @@ function Trips() {
                             >
                                 ×
                             </button>
-                            
+
                             <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                 <button onClick={prevImage} style={{ background: 'none', border: 'none', color: '#fff', fontSize: '3rem', cursor: 'pointer', padding: '0 20px' }}>‹</button>
-                                <img 
+                                <img
                                     src={
                                         showGallery.photoUrls && showGallery.photoUrls.length > 0
                                             ? showGallery.photoUrls[currentImageIndex]
                                             : showGallery.photoUrl ||
                                               `https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=800&q=60`
-                                    } 
-                                    alt="Room view" 
+                                    }
+                                    alt="Room view"
                                     style={{ maxHeight: '100%', maxWidth: '100%', objectFit: 'contain' }}
                                 />
                                 <button onClick={nextImage} style={{ background: 'none', border: 'none', color: '#fff', fontSize: '3rem', cursor: 'pointer', padding: '0 20px' }}>›</button>
                             </div>
-                            
+
                             <div style={{ position: 'absolute', bottom: '-40px', width: '100%', textAlign: 'center', color: '#fff' }}>
                                 {showGallery.photoUrls && showGallery.photoUrls.length > 0 ? `${currentImageIndex + 1} / ${showGallery.photoUrls.length}` : "1 / 1"}
                             </div>

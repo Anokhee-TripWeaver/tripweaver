@@ -14,7 +14,7 @@ const popularPlaces = [
 export default function Explore() {
   const navigate = useNavigate();
 
-  const username = sessionStorage.getItem("username");
+  const username = localStorage.getItem("username");
   const isLoggedIn = !!username;
 
   const [, setWhere] = useState("");
