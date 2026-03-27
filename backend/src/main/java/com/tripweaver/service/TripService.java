@@ -45,7 +45,11 @@ public class TripService {
         
         List<Hotel> hotels = hotelService.searchHotels(destination, budget);
         
-        for (Hotel h : hotels) {
+        // Optimize: Limit to top 20 hotels and fetch in parallel
+        int limit = Math.min(hotels.size(), 20);
+        List<Hotel> topHotels = hotels.subList(0, limit);
+
+        topHotels.parallelStream().forEach(h -> {
             try {
                 String query;
                 if (h.getAddress() != null && !h.getAddress().isBlank()) {
@@ -73,9 +77,9 @@ public class TripService {
             } catch (Exception e) {
                 System.err.println("Error fetching image for " + h.getName() + ": " + e.getMessage());
             }
-        }
+        });
         
-        response.setHotels(hotels);
+        response.setHotels(topHotels);
         return response;
     }
 }

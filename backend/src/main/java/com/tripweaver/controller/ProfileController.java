@@ -1,49 +1,104 @@
 package com.tripweaver.controller;
 
 import com.tripweaver.model.SearchHistory;
+import com.tripweaver.model.User;
 import com.tripweaver.service.SearchHistoryService;
+import com.tripweaver.service.UserService;
 
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 @RestController
 @RequestMapping("/api/profile")
 public class ProfileController {
 
     private final SearchHistoryService historyService;
+    private final UserService userService;
 
-    public ProfileController(SearchHistoryService historyService) {
+    public ProfileController(SearchHistoryService historyService, UserService userService) {
         this.historyService = historyService;
+        this.userService = userService;
     }
 
     // ✅ PROFILE + HISTORY
     @GetMapping
-    public Map<String, Object> getProfile(
-            @AuthenticationPrincipal OAuth2User user) {
+    public Map<String, Object> getProfile(Authentication authentication) {
 
         Map<String, Object> res = new HashMap<>();
 
         // 🔐 Safety check (important)
-        if (user == null) {
+        if (authentication == null || !authentication.isAuthenticated()) {
             res.put("loggedIn", false);
             return res;
         }
 
-        String email = user.getAttribute("email");
+        Object principal = authentication.getPrincipal();
+        String email = null;
+        String name = null;
+        String picture = null;
 
-        res.put("name", user.getAttribute("name"));
-        res.put("email", email);
-        res.put("picture", user.getAttribute("picture"));
+        if (principal instanceof OAuth2User) {
+            OAuth2User oauthUser = (OAuth2User) principal;
+            email = oauthUser.getAttribute("email");
+            name = oauthUser.getAttribute("name");
+            picture = oauthUser.getAttribute("picture");
+        } else if (principal instanceof UserDetails) {
+            UserDetails userDetails = (UserDetails) principal;
+            String username = userDetails.getUsername();
+            Optional<User> userOpt = userService.findByUsername(username);
+            if (userOpt.isPresent()) {
+                User dbUser = userOpt.get();
+                email = dbUser.getEmail();
+                name = dbUser.getUsername(); // Or add a 'name' field to User entity if desired
+                // picture = null; // Use default in frontend
+            }
+        }
 
-        List<SearchHistory> history =
-                historyService.getUserHistory(email);
+        if (email != null) {
+            res.put("loggedIn", true);
+            res.put("name", name);
+            res.put("email", email);
+            res.put("picture", picture);
+
+            List<SearchHistory> history = historyService.getUserHistory(email);
+            res.put("history", history);
+        } else {
+             res.put("loggedIn", false);
+        }
+
+        return res;
+    }
+
+    // ✅ PUBLIC PROFILE BY EMAIL (NO SESSION REQUIRED)
+    @GetMapping("/public")
+    public Map<String, Object> getProfileByEmail(@RequestParam String email) {
+        Map<String, Object> res = new HashMap<>();
+
+        Optional<User> userOpt = userService.findByEmail(email);
+        if (userOpt.isEmpty()) {
+            res.put("loggedIn", false);
+            return res;
+        }
+
+        User dbUser = userOpt.get();
+        res.put("loggedIn", true);
+        res.put("name", dbUser.getUsername());
+        res.put("email", dbUser.getEmail());
+        res.put("picture", null);
+
+        List<SearchHistory> history = historyService.getUserHistory(email);
         res.put("history", history);
 
         return res;
@@ -51,14 +106,25 @@ public class ProfileController {
 
     // ✅ LOGIN STATUS (FOR NAVBAR)
     @GetMapping("/status")
-    public Map<String, Object> loginStatus(
-            @AuthenticationPrincipal OAuth2User user) {
+    public Map<String, Object> loginStatus(Authentication authentication) {
 
         Map<String, Object> res = new HashMap<>();
 
-        if (user != null) {
-            res.put("loggedIn", true);
-            res.put("name", user.getAttribute("name"));
+        if (authentication != null && authentication.isAuthenticated()) {
+            Object principal = authentication.getPrincipal();
+            if (principal instanceof OAuth2User) {
+                res.put("loggedIn", true);
+                res.put("name", ((OAuth2User) principal).getAttribute("name"));
+                res.put("email", ((OAuth2User) principal).getAttribute("email"));
+            } else if (principal instanceof UserDetails) {
+                res.put("loggedIn", true);
+                res.put("name", ((UserDetails) principal).getUsername());
+                // For manual login, we might need to fetch email from DB if not in UserDetails
+                // Assuming username IS email or related
+                res.put("email", ((UserDetails) principal).getUsername()); 
+            } else {
+                 res.put("loggedIn", false);
+            }
         } else {
             res.put("loggedIn", false);
         }

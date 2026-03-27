@@ -4,9 +4,12 @@ import java.util.List;
 import java.security.Principal;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import com.tripweaver.model.Destination;
+import com.tripweaver.model.PopularDestinationDTO;
+import com.tripweaver.service.BookingService;
 import com.tripweaver.service.DestinationService;
 import com.tripweaver.service.SearchHistoryService;
 import com.tripweaver.util.SecurityUtil;
@@ -20,6 +23,9 @@ public class DestinationController {
 
     @Autowired
     private SearchHistoryService historyService;
+
+    @Autowired
+    private BookingService bookingService;
 
     @GetMapping("/search/google")
     public List<Destination> searchGoogle(
@@ -54,5 +60,19 @@ public class DestinationController {
     @GetMapping("/photos/{placeId}")
     public List<String> getPhotos(@PathVariable String placeId) {
         return destinationService.getPlacePhotosLegacy(placeId);
+    }
+
+    /**
+     * Get top 4 popular destinations based on booking count
+     * GET /api/destination/popular
+     */
+    @GetMapping("/popular")
+    public ResponseEntity<List<PopularDestinationDTO>> getPopularDestinations() {
+        try {
+            List<PopularDestinationDTO> popularDestinations = bookingService.getPopularDestinations();
+            return ResponseEntity.ok(popularDestinations);
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().build();
+        }
     }
 }

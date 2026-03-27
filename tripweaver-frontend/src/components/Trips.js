@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 import Navbar from "./navbar";
+import { useLocation } from "react-router-dom";
 import "./Trips.css";
-
-const API_BASE = "http://localhost:8090/api";
+import API_BASE from "../config";
 
 function Trips() {
     const [formData, setFormData] = useState({
@@ -26,12 +26,54 @@ function Trips() {
     const [step, setStep] = useState(1);
     const [showGallery, setShowGallery] = useState(null);
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
+    
+    // Custom modal state
+    const [customModal, setCustomModal] = useState({
+        show: false,
+        title: "",
+        message: "",
+        type: "info", // success, error, warning, info
+        onConfirm: null
+    });
 
     const username = sessionStorage.getItem("username");
     const cartKey = username ? `cart-${username}` : "cart";
+    const location = useLocation();
+
+    // Show custom modal helper
+    const showModal = (title, message, type = "info", onConfirm = null) => {
+        setCustomModal({ show: true, title, message, type, onConfirm });
+    };
+
+    const closeModal = () => {
+        setCustomModal({ show: false, title: "", message: "", type: "info", onConfirm: null });
+    };
 
     // Load session data on mount
     useEffect(() => {
+        const restoreData = location.state?.restore;
+        // 1. Check if we are restoring from history (passed via navigate state)
+        if (restoreData) {
+            const h = restoreData;
+            // Map SearchHistory fields to Trips formData
+            // SearchHistory: origin, destination, searchDate, etc.
+            // Trips formData: origin, destination, startDate, endDate, budget
+            // Note: History might store single date or range. We need to be flexible.
+            
+            const newFormData = {
+                origin: h.origin || "",
+                destination: h.destination || "",
+                startDate: h.searchDate || "", // Assuming single date or start date
+                endDate: "", // Might need to infer or leave empty
+                budget: "" // Budget isn't stored in history currently
+            };
+            setFormData(newFormData);
+            // Optionally clear step to 1 to let user re-enter budget/end-date if missing
+            setStep(1); 
+            return; // Skip session storage load if restoring
+        }
+
+        // 2. Otherwise load from session storage
         const savedSession = sessionStorage.getItem("trip_session");
         if (savedSession) {
             try {
@@ -47,7 +89,7 @@ function Trips() {
                 console.error("Failed to restore session", e);
             }
         }
-    }, []);
+    }, [location.state]);
 
     // Save session data whenever state changes
     useEffect(() => {
@@ -141,13 +183,13 @@ function Trips() {
 
         // If there is an item of a different type, block mixing flights and hotels
         if (compareList.length > 0 && compareList[0].type !== type) {
-            alert("You can only compare flights with flights or hotels with hotels.");
+            showModal("Cannot Compare", "You can only compare flights with flights or hotels with hotels.", "warning");
             return;
         }
 
         // Enforce max of 2 items
         if (compareList.length >= 2) {
-            alert("You can compare up to 2 options at a time.");
+            showModal("Limit Reached", "You can compare up to 2 options at a time.", "info");
             return;
         }
 
@@ -157,7 +199,7 @@ function Trips() {
     // Open the comparison modal only when exactly two options are selected
     const openCompareModal = () => {
         if (compareList.length !== 2) {
-            alert("Select exactly two options to compare.");
+            showModal("Selection Required", "Select exactly two options to compare.", "info");
             return;
         }
         setShowCompareModal(true);
@@ -217,7 +259,9 @@ function Trips() {
         }
     };
 
-    const handleInputChange = (e) => {
+    const today = new Date().toISOString().split("T")[0];
+
+    const handleChange = (e) => {
         setFormData({ ...formData, [e.target.name]: e.target.value });
     };
 
@@ -398,9 +442,22 @@ function Trips() {
         const budget = parseFloat(formData.budget) || 0;
         
         if (total > budget) {
-            alert(`⚠️ Warning: Your total trip cost (₹${total}) exceeds your budget (₹${budget})!`);
+            showModal(
+                "Budget Exceeded", 
+                `Your total trip cost (₹${total}) exceeds your budget (₹${budget})!`, 
+                "warning",
+                () => {
+                    // Still add to cart after warning
+                    addToCartConfirmed(total);
+                    closeModal();
+                }
+            );
+        } else {
+            addToCartConfirmed(total);
         }
-        
+    };
+
+    const addToCartConfirmed = (total) => {
         const cartItem = {
             id: Date.now(),
             destination: formData.destination,
@@ -416,7 +473,78 @@ function Trips() {
         const existingCart = JSON.parse(localStorage.getItem(cartKey) || "[]");
         localStorage.setItem(cartKey, JSON.stringify([...existingCart, cartItem]));
 
-        alert(`✅ Added to cart! Total: ₹${total}`);
+        // Dispatch storage event to notify other components (like Navbar)
+        window.dispatchEvent(new Event("storage"));
+
+        showModal("Added to Cart", `Trip to ${formData.destination} added successfully! Total: ₹${total}`, "success");
+    };
+
+    const [publishForm, setPublishForm] = useState({ seats: "1", note: "" });
+
+    const handlePublishCollaboration = async () => {
+        if (!username) {
+            showModal("Sign In Required", "Please sign in to publish a collaboration trip.", "warning");
+            return;
+        }
+        const userEmail = sessionStorage.getItem("email") || "";
+        if (!userEmail) {
+            showModal("Email Required", "We need your email to publish this trip so joiners can reach you.", "warning");
+            return;
+        }
+
+        try {
+            if (!selectedFlight || !selectedHotel || !formData.destination) {
+                showModal("Incomplete Trip", "Please select a flight and hotel before publishing.", "warning");
+                return;
+            }
+
+            const seatsNum = parseInt(publishForm.seats);
+            if (isNaN(seatsNum) || seatsNum < 1) {
+                showModal("Invalid Seats", "Please enter at least 1 available seat.", "warning");
+                return;
+            }
+
+            const travelerCountNum = Math.max(1, parseInt(formData.travelers) || 1);
+            const individualPrice = getTotalCost() / travelerCountNum;
+            const totalTripParticipants = seatsNum + 1; // host + joiners
+            const totalTripCost = individualPrice * totalTripParticipants;
+
+            const collabData = {
+                origin: formData.origin,
+                destination: formData.destination,
+                startDate: formData.startDate,
+                endDate: formData.endDate,
+                hostName: username,
+                hostEmail: userEmail,
+                seatsAvailable: seatsNum,
+                totalCost: totalTripCost,
+                pricePerPerson: individualPrice,
+                note: publishForm.note,
+                flightDetails: JSON.stringify(selectedFlight),
+                returnFlightDetails: selectedReturnFlight ? JSON.stringify(selectedReturnFlight) : null,
+                hotelDetails: JSON.stringify(selectedHotel)
+            };
+
+            await axios.post(`${API_BASE}/collaboration-trips`, collabData, { withCredentials: true });
+            
+            // Also update the saved trip to mark it as an open trip if it exists
+            try {
+                const savedTripsRes = await axios.get(`${API_BASE}/trips/saved`, { params: { username }, withCredentials: true });
+                const existing = (savedTripsRes.data || []).find(t => 
+                    t.destination === formData.destination && 
+                    t.startDate === formData.startDate && 
+                    t.endDate === formData.endDate
+                );
+                if (existing) {
+                    await axios.post(`${API_BASE}/trip/save`, { ...existing, openTrip: true, seatsAvailable: seatsNum, note: publishForm.note }, { withCredentials: true });
+                }
+            } catch (e) {}
+
+            showModal("Published!", "Your trip is now visible on the Open Trips board for others to join!", "success");
+        } catch (err) {
+            console.error("Publish Error:", err.response?.data || err.message);
+            showModal("Publish Failed", err.response?.data?.message || "Failed to publish collaboration trip. Please try again.", "error");
+        }
     };
 
     const handleSaveTrip = async () => {
@@ -434,10 +562,10 @@ function Trips() {
             };
 
             await axios.post(`${API_BASE}/trip/save`, tripData, { withCredentials: true });
-            alert("Trip saved successfully to your wishlist!");
+            showModal("Trip Saved", "Trip saved successfully to your wishlist!", "success");
         } catch (err) {
             console.error(err);
-            alert("Failed to save trip. Please try again.");
+            showModal("Save Failed", "Failed to save trip. Please try again.", "error");
         }
     };
 
@@ -449,15 +577,22 @@ function Trips() {
     };
 
     return (
-        <div className="trips-page">
+        <div className="trips-page" style={{
+            minHeight: '100vh',
+            backgroundImage: 'linear-gradient(rgba(255, 248, 240, 0.7), rgba(255, 245, 235, 0.7)), url("https://images.unsplash.com/photo-1436491865332-7a61a109cc05?w=1920&q=80")',
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            backgroundAttachment: 'fixed',
+            paddingBottom: '40px'
+        }}>
             <Navbar />
             
-            {/* Budget Tracker */}
+            {/* Budget Tracker - Moved to bottom-left */}
             {formData.budget && (
                 <div className="budget-tracker" style={{
                     position: 'fixed',
-                    top: '80px',
-                    right: '20px',
+                    bottom: '20px',
+                    left: '20px',
                     background: 'white',
                     padding: '15px',
                     borderRadius: '8px',
@@ -690,33 +825,45 @@ function Trips() {
 
             <div className="trips-container">
                 <header className="trips-header">
-                    <h2>Plan Your Trip</h2>
-                    <p>Find the best flights and stays within your budget</p>
+                    <h2 style={{ color: '#2c3e50', fontWeight: '700', fontSize: '2.5rem', textShadow: '2px 2px 4px rgba(255,255,255,0.8)' }}>Plan Your Trip</h2>
+                    <p style={{ color: '#34495e', fontWeight: '500', fontSize: '1.1rem', textShadow: '1px 1px 2px rgba(255,255,255,0.7)' }}>Find the best flights and stays within your budget</p>
                 </header>
 
                 <form className="search-panel" onSubmit={handleSearch}>
                     <div className="input-row">
                         <div className="field">
                             <label>Origin</label>
-                            <input name="origin" type="text" placeholder="e.g. HYD" value={formData.origin} onChange={handleInputChange} />
+                            <input name="origin" type="text" placeholder="e.g. HYD" value={formData.origin} onChange={handleChange} />
                         </div>
                         <div className="field">
                             <label>Destination</label>
-                            <input name="destination" type="text" placeholder="e.g. Bangkok" value={formData.destination} onChange={handleInputChange} />
+                            <input name="destination" type="text" placeholder="e.g. Bangkok" value={formData.destination} onChange={handleChange} />
                         </div>
                     </div>
                     <div className="input-row">
                         <div className="field">
                             <label>Departure</label>
-                            <input name="startDate" type="date" value={formData.startDate} onChange={handleInputChange} />
+                            <input 
+                                name="startDate" 
+                                type="date" 
+                                value={formData.startDate} 
+                                min={today}
+                                onChange={handleChange} 
+                            />
                         </div>
                         <div className="field">
                             <label>Return</label>
-                            <input name="endDate" type="date" value={formData.endDate} onChange={handleInputChange} />
+                            <input 
+                                name="endDate" 
+                                type="date" 
+                                value={formData.endDate} 
+                                min={formData.startDate || today}
+                                onChange={handleChange} 
+                            />
                         </div>
                         <div className="field">
                             <label>Total Budget</label>
-                            <input name="budget" type="number" placeholder="₹" value={formData.budget} onChange={handleInputChange} />
+                            <input name="budget" type="number" placeholder="₹" value={formData.budget} onChange={handleChange} />
                         </div>
                     </div>
                     <button type="submit" className="search-btn" disabled={loading}>
@@ -1029,6 +1176,38 @@ function Trips() {
                                                 ❤️ Save Trip
                                             </button>
                                         </div>
+
+                                        {/* Publish for Collaboration Panel */}
+                                        <div style={{ marginTop: '30px', padding: '20px', background: '#E8F5E9', borderRadius: '12px', border: '2px dashed #4CAF50' }}>
+                                            <h4 style={{ margin: '0 0 10px 0', color: '#2E7D32' }}>🤝 Publish for Collaboration</h4>
+                                            <p style={{ fontSize: '0.9rem', color: '#455A64', marginBottom: '15px' }}>
+                                                Want to share this trip and split costs? Publish it to the <strong>Open Trips</strong> board!
+                                            </p>
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                                    <label style={{ fontSize: '0.9rem', fontWeight: 'bold' }}>Seats Available:</label>
+                                                    <input 
+                                                        type="number" 
+                                                        min="1" 
+                                                        value={publishForm.seats} 
+                                                        onChange={(e) => setPublishForm({...publishForm, seats: e.target.value})}
+                                                        style={{ width: '60px', padding: '6px', borderRadius: '4px', border: '1px solid #ccc' }}
+                                                    />
+                                                </div>
+                                                <textarea 
+                                                    placeholder="Add a note for potential joiners (optional)..."
+                                                    value={publishForm.note}
+                                                    onChange={(e) => setPublishForm({...publishForm, note: e.target.value})}
+                                                    style={{ width: '100%', height: '60px', padding: '10px', borderRadius: '8px', border: '1px solid #ccc', resize: 'none' }}
+                                                />
+                                                <button 
+                                                    onClick={handlePublishCollaboration}
+                                                    style={{ padding: '12px', background: '#2E7D32', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}
+                                                >
+                                                    Publish to Open Trips Board
+                                                </button>
+                                            </div>
+                                        </div>
                                     </div>
                                 </section>
                             )}
@@ -1070,6 +1249,149 @@ function Trips() {
                             
                             <div style={{ position: 'absolute', bottom: '-40px', width: '100%', textAlign: 'center', color: '#fff' }}>
                                 {showGallery.photoUrls && showGallery.photoUrls.length > 0 ? `${currentImageIndex + 1} / ${showGallery.photoUrls.length}` : "1 / 1"}
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Custom Modal */}
+                {customModal.show && (
+                    <div style={{
+                        position: 'fixed',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        background: 'rgba(0, 0, 0, 0.6)',
+                        backdropFilter: 'blur(4px)',
+                        display: 'flex',
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        zIndex: 10000,
+                        animation: 'fadeIn 0.2s ease-out'
+                    }}>
+                        <div style={{
+                            background: 'white',
+                            borderRadius: '20px',
+                            padding: '30px',
+                            maxWidth: '450px',
+                            width: '90%',
+                            boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
+                            animation: 'slideUp 0.3s ease-out',
+                            position: 'relative'
+                        }}>
+                            {/* Icon based on type */}
+                            <div style={{
+                                width: '60px',
+                                height: '60px',
+                                borderRadius: '50%',
+                                margin: '0 auto 20px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontSize: '30px',
+                                background: customModal.type === 'success' ? '#d4edda' :
+                                           customModal.type === 'error' ? '#f8d7da' :
+                                           customModal.type === 'warning' ? '#fff3cd' : '#d1ecf1'
+                            }}>
+                                {customModal.type === 'success' ? '✓' :
+                                 customModal.type === 'error' ? '✕' :
+                                 customModal.type === 'warning' ? '⚠' : 'ℹ'}
+                            </div>
+
+                            {/* Title */}
+                            <h3 style={{
+                                margin: '0 0 15px 0',
+                                fontSize: '1.5rem',
+                                fontWeight: '700',
+                                textAlign: 'center',
+                                color: '#2c3e50'
+                            }}>
+                                {customModal.title}
+                            </h3>
+
+                            {/* Message */}
+                            <p style={{
+                                margin: '0 0 25px 0',
+                                fontSize: '1rem',
+                                lineHeight: '1.6',
+                                textAlign: 'center',
+                                color: '#555'
+                            }}>
+                                {customModal.message}
+                            </p>
+
+                            {/* Buttons */}
+                            <div style={{
+                                display: 'flex',
+                                gap: '10px',
+                                justifyContent: 'center'
+                            }}>
+                                {customModal.onConfirm ? (
+                                    <>
+                                        <button
+                                            onClick={() => {
+                                                customModal.onConfirm();
+                                            }}
+                                            style={{
+                                                flex: 1,
+                                                padding: '12px 24px',
+                                                background: customModal.type === 'warning' ? '#ff9800' : '#4CAF50',
+                                                color: 'white',
+                                                border: 'none',
+                                                borderRadius: '10px',
+                                                fontSize: '1rem',
+                                                fontWeight: '600',
+                                                cursor: 'pointer',
+                                                transition: 'all 0.2s'
+                                            }}
+                                            onMouseOver={(e) => e.target.style.transform = 'translateY(-2px)'}
+                                            onMouseOut={(e) => e.target.style.transform = 'translateY(0)'}
+                                        >
+                                            Continue
+                                        </button>
+                                        <button
+                                            onClick={closeModal}
+                                            style={{
+                                                flex: 1,
+                                                padding: '12px 24px',
+                                                background: '#e0e0e0',
+                                                color: '#333',
+                                                border: 'none',
+                                                borderRadius: '10px',
+                                                fontSize: '1rem',
+                                                fontWeight: '600',
+                                                cursor: 'pointer',
+                                                transition: 'all 0.2s'
+                                            }}
+                                            onMouseOver={(e) => e.target.style.transform = 'translateY(-2px)'}
+                                            onMouseOut={(e) => e.target.style.transform = 'translateY(0)'}
+                                        >
+                                            Cancel
+                                        </button>
+                                    </>
+                                ) : (
+                                    <button
+                                        onClick={closeModal}
+                                        style={{
+                                            padding: '12px 40px',
+                                            background: customModal.type === 'success' ? '#4CAF50' :
+                                                       customModal.type === 'error' ? '#f44336' :
+                                                       customModal.type === 'warning' ? '#ff9800' : '#2196F3',
+                                            color: 'white',
+                                            border: 'none',
+                                            borderRadius: '10px',
+                                            fontSize: '1rem',
+                                            fontWeight: '600',
+                                            cursor: 'pointer',
+                                            transition: 'all 0.2s'
+                                        }}
+                                        onMouseOver={(e) => e.target.style.transform = 'translateY(-2px)'}
+                                        onMouseOut={(e) => e.target.style.transform = 'translateY(0)'}
+                                    >
+                                        OK
+                                    </button>
+                                )}
                             </div>
                         </div>
                     </div>

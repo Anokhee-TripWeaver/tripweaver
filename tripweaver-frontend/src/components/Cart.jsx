@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Navbar from "./navbar";
+import CustomModal from "./CustomModal";
 import axios from "axios";
-
-const API_BASE = "http://localhost:8090/api";
+import API_BASE from "../config";
 
 export default function Cart() {
     const navigate = useNavigate();
@@ -15,9 +15,27 @@ export default function Cart() {
     const [selectedHotel, setSelectedHotel] = useState(null);
     const [showGallery, setShowGallery] = useState(null);
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
+    
+    // Custom modal state
+    const [modal, setModal] = useState({
+        show: false,
+        title: "",
+        message: "",
+        type: "info",
+        onConfirm: null
+    });
 
     const username = sessionStorage.getItem("username");
+    const email = sessionStorage.getItem("email");
     const cartKey = username ? `cart-${username}` : "cart";
+
+    const showModal = (title, message, type = "info", onConfirm = null) => {
+        setModal({ show: true, title, message, type, onConfirm });
+    };
+
+    const closeModal = () => {
+        setModal({ show: false, title: "", message: "", type: "info", onConfirm: null });
+    };
 
     useEffect(() => {
         const items = JSON.parse(localStorage.getItem(cartKey) || "[]");
@@ -35,8 +53,32 @@ export default function Cart() {
         localStorage.removeItem(cartKey);
     };
 
-    const handleCheckout = () => {
-        alert("Proceeding to payment gateway... (Mock)");
+    const handleCheckout = async () => {
+        if (!username) {
+            showModal("Login Required", "Please login to complete your booking.", "warning", () => {
+                closeModal();
+                navigate("/signup");
+            });
+            return;
+        }
+
+        if (cartItems.length === 0) {
+            showModal("Empty Cart", "Your cart is empty!", "info");
+            return;
+        }
+
+        const totalCost = cartItems.reduce((sum, item) => sum + item.totalCost, 0);
+        
+        // Navigate to payment page with booking data
+        navigate("/payment", {
+            state: {
+                bookingData: {
+                    items: cartItems,
+                    totalCost: totalCost,
+                    username: email || username
+                }
+            }
+        });
     };
 
     const openDetails = (item) => {
@@ -85,7 +127,10 @@ export default function Cart() {
 
         if (hotel.placeId) {
             try {
-                const res = await axios.get(`${API_BASE}/destination/photos/${hotel.placeId}`);
+                const res = await axios.get(
+                    `${API_BASE}/destination/photos/${hotel.placeId}`,
+                    { withCredentials: true }
+                );
                 const urls = res.data || [];
                 if (urls.length > 0) {
                     setShowGallery(prev =>
@@ -126,7 +171,7 @@ export default function Cart() {
     return (
         <div style={{
             minHeight: '100vh',
-            backgroundImage: 'url("https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?q=80&w=2021&auto=format&fit=crop")',
+            backgroundImage: 'linear-gradient(rgba(240, 245, 255, 0.7), rgba(235, 245, 255, 0.7)), url("https://images.unsplash.com/photo-1488085061387-422e29b40080?w=1920&q=80")',
             backgroundSize: 'cover',
             backgroundPosition: 'center',
             backgroundAttachment: 'fixed',
@@ -134,17 +179,17 @@ export default function Cart() {
         }}>
             <Navbar />
             <div style={{ maxWidth: '1200px', margin: '100px auto 0', padding: '20px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px', borderBottom: '2px solid rgba(255,255,255,0.3)', paddingBottom: '15px' }}>
-                    <h2 style={{ color: 'white', margin: 0, textShadow: '0 2px 4px rgba(0,0,0,0.5)' }}>🛒 My Cart</h2>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px', borderBottom: '2px solid rgba(0,0,0,0.15)', paddingBottom: '15px' }}>
+                    <h2 style={{ color: '#1a1a1a', margin: 0, textShadow: '0 2px 4px rgba(255,255,255,0.9)', fontWeight: 'bold' }}>🛒 My Cart</h2>
                     {cartItems.length > 0 && (
-                        <button onClick={clearCart} style={{ background: 'rgba(255,255,255,0.2)', color: 'white', border: '1px solid white', padding: '8px 16px', borderRadius: '4px', cursor: 'pointer', backdropFilter: 'blur(5px)' }}>
+                        <button onClick={clearCart} style={{ background: 'rgba(255,255,255,0.9)', color: '#333', border: '1px solid rgba(0,0,0,0.2)', padding: '8px 16px', borderRadius: '4px', cursor: 'pointer', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}>
                             Clear Cart
                         </button>
                     )}
                 </div>
 
                 {cartItems.length === 0 ? (
-                    <div style={{ textAlign: 'center', color: 'white', marginTop: '50px', background: 'rgba(0,0,0,0.5)', padding: '40px', borderRadius: '12px' }}>
+                    <div style={{ textAlign: 'center', color: '#1a1a1a', marginTop: '50px', background: 'rgba(255,255,255,0.95)', padding: '40px', borderRadius: '12px', boxShadow: '0 4px 15px rgba(0,0,0,0.15)' }}>
                         <h3>Your cart is empty.</h3>
                         <button onClick={() => navigate('/trips')} style={{ marginTop: '20px', padding: '10px 20px', background: '#FF9800', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
                             Start Planning
@@ -468,6 +513,16 @@ export default function Cart() {
                     </div>
                 </div>
             )}
+
+            {/* Custom Modal */}
+            <CustomModal
+                show={modal.show}
+                title={modal.title}
+                message={modal.message}
+                type={modal.type}
+                onConfirm={modal.onConfirm}
+                onClose={closeModal}
+            />
         </div>
     );
 }

@@ -76,8 +76,7 @@ public class DestinationService {
                 }
 
                 if (photoUrl == null) {
-                    photoUrl = "https://source.unsplash.com/800x400/?"
-                            + URLEncoder.encode(name + "," + category, StandardCharsets.UTF_8);
+                    photoUrl = "https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=800&q=60";
                     photoUrls.add(photoUrl);
                 }
 

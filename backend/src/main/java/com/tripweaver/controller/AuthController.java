@@ -11,11 +11,17 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContext;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
+import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.web.bind.annotation.*;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 
 @RestController
 @RequestMapping("/api/auth")
-@CrossOrigin(origins = "*")
 public class AuthController {
 
     @Autowired
@@ -23,6 +29,9 @@ public class AuthController {
 
     @Autowired
     private AuthenticationManager authenticationManager;
+
+    private final SecurityContextRepository securityContextRepository =
+            new HttpSessionSecurityContextRepository();
 
     @GetMapping("/test")
     public String testEndpoint() {
@@ -44,7 +53,11 @@ public class AuthController {
     }
 
    @PostMapping("/signin")
-    public ResponseEntity<Map<String, Object>> signin(@RequestBody Map<String, String> payload) {
+    public ResponseEntity<Map<String, Object>> signin(
+            @RequestBody Map<String, String> payload,
+            HttpServletRequest request,
+            HttpServletResponse response
+    ) {
         String username = payload.get("username");
         String email = payload.get("email");
         String password = payload.get("password");
@@ -67,26 +80,53 @@ public class AuthController {
         }
 
         try {
-            authenticationManager.authenticate(
+            Authentication authentication = authenticationManager.authenticate(
                     new UsernamePasswordAuthenticationToken(username, password)
             );
+            
+            // ✅ CRITICAL: Set the security context so the session is established
+            SecurityContext context = SecurityContextHolder.createEmptyContext();
+            context.setAuthentication(authentication);
+            SecurityContextHolder.setContext(context);
+            securityContextRepository.saveContext(context, request, response);
             
             // Refetch user if null (though if authentication passed, it should exist, but good to be safe)
             if (user == null) {
                  user = userService.findByUsername(username).orElse(null);
             }
             
-            Map<String, Object> response = new HashMap<>();
-            response.put("message", "Login successful");
+            Map<String, Object> responseBody = new HashMap<>();
+            responseBody.put("message", "Login successful");
             if (user != null) {
-                response.put("username", user.getUsername());
-                response.put("email", user.getEmail());
-                response.put("role", user.getRole());
+                responseBody.put("username", user.getUsername());
+                responseBody.put("email", user.getEmail());
+                responseBody.put("role", user.getRole());
             }
             
-            return ResponseEntity.ok(response);
+            return ResponseEntity.ok(responseBody);
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "Invalid username or password!"));
+        }
+    }
+
+    @PostMapping("/logout")
+    public ResponseEntity<Map<String, String>> logout(HttpServletRequest request) {
+        try {
+            // Clear security context
+            SecurityContextHolder.clearContext();
+            
+            // Invalidate session
+            if (request.getSession(false) != null) {
+                request.getSession().invalidate();
+            }
+            
+            Map<String, String> response = new HashMap<>();
+            response.put("message", "Logout successful");
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            Map<String, String> response = new HashMap<>();
+            response.put("message", "Logout failed");
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
         }
     }
 }

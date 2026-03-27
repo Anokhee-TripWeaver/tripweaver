@@ -9,26 +9,7 @@
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
-  /* Background is now provided globally to keep pages consistent */
-}
-
-/* --- NAVBAR STYLES --- */
-.navbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 24px 40px; /* smaller header padding */
-  min-height: 64px; /* reduced height so it doesn't dominate */
-  background: linear-gradient(90deg, #6f2a4b, #0dadad); /* refreshed navbar gradient */
-  color: white;
-  flex-wrap: wrap;
-  font-size: 20px;
-  position: fixed; /* Fixed to stay at the top */
-  top: 0;
-  left: 0;
-  width: 100%;
-  z-index: 1000;
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.22);
+  padding-top: 80px; /* Space for fixed navbar */
 }
 
 .logo {
@@ -65,8 +46,8 @@
   color: #ffdd57;
 }
 
-/* --- HERO SECTION --- */
-.hero {
+/* --- EXPLORE HERO SECTION --- */
+.explore-hero {
   position: relative;
   width: 100%;
   height: 100vh; /* make hero full viewport height */
@@ -80,7 +61,7 @@
 }
 
 /* Dark overlay to make text readable */
-.hero::before {
+.explore-hero::before {
   content: '';
   position: absolute;
   top: 0;
@@ -91,7 +72,7 @@
   z-index: 1;
 }
 
-.hero-content {
+.explore-hero-content {
   position: relative;
   z-index: 2;
   color: #ffffff; /* base color for hero content; h1 strong keeps accent */
@@ -99,7 +80,7 @@
   margin-top: 20px; /* slightly lower to account for smaller navbar */
 }
 
-.hero h1 {
+.explore-hero h1 {
   font-size: 7rem; /* bigger Discover */
   margin: 0 0 14px 0;
   line-height: 1.01;
@@ -108,16 +89,16 @@
   color: #ffffff;
 }
 
-.hero h1 strong {
+.explore-hero h1 strong {
   color: #ffd56a; /* accent for the important words */
 }
 
 /* Make the emphasized text inside the hero paragraph teal (only affects p strong) */
-.hero p strong {
+.explore-hero p strong {
   color: #ffdd50;
 }
 
-.hero h2 {
+.explore-hero h2 {
   font-size: 3.2rem; /* large but smaller than Discover */
   margin: 0 0 22px 0;
   color: #fff;
@@ -125,7 +106,7 @@
   font-weight: 800;
 }
 
-.hero p {
+.explore-hero p {
   font-size: 1.5rem;
   margin-bottom: 100px;
 }
@@ -265,8 +246,8 @@
 }
 
 @media (max-width: 900px) {
-  .hero h1 { font-size: 2.8rem; }
-  .hero h2 { font-size: 1.25rem; }
+  .explore-hero h1 { font-size: 2.8rem; }
+  .explore-hero h2 { font-size: 1.25rem; }
   .get-started { font-size: 1rem; padding: 12px 22px; }
   /* on small screens put labels back to bottom to avoid overlap */
   .place-card .place-label { top: auto; bottom: 12px; transform: none; }
@@ -296,7 +277,7 @@ footer {
     margin-top: 10px;
     justify-content: center;
   }
-  .hero h2 {
+  .explore-hero h2 {
     font-size: 3rem;
   }
   .search-bar {

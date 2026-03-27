@@ -122,12 +122,7 @@ public class HotelService {
                 }
             }
             reader.close();
-            System.out.println("Loaded " + allHotels.size() + " hotels from CSV.");
-            if (!allHotels.isEmpty()) {
-                System.out.println("Sample Hotel: " + allHotels.get(0).getName() + " | Price: " + allHotels.get(0).getPrice());
-            }
         } catch (Exception e) {
-            e.printStackTrace();
             System.err.println("Failed to load hotels from CSV: " + e.getMessage());
         }
     }
@@ -170,7 +165,6 @@ public class HotelService {
 
     public List<Hotel> searchHotels(String destination, Double maxPrice) {
         String destLower = destination.toLowerCase().trim();
-        System.out.println("Searching hotels for: " + destLower + " with budget: " + maxPrice);
         
         List<Hotel> filtered = allHotels.stream()
                 .filter(h -> {
@@ -180,13 +174,10 @@ public class HotelService {
                 })
                 .collect(Collectors.toList());
 
-        System.out.println("Found " + filtered.size() + " hotels matching location: " + destLower);
-
         if (maxPrice != null && maxPrice > 0) {
             filtered = filtered.stream()
                     .filter(h -> h.getPrice() <= maxPrice)
                     .collect(Collectors.toList());
-            System.out.println("After budget filter (" + maxPrice + "): " + filtered.size() + " hotels remain.");
         }
 
         return filtered;

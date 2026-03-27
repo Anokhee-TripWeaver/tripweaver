@@ -1,6 +1,7 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import Navbar from "./navbar";
 import { generateItinerary } from "../services/api";
+import { useLocation } from "react-router-dom";
 import "./ItineraryPlanner.css";
 
 export default function ItineraryPlanner() {
@@ -8,6 +9,49 @@ export default function ItineraryPlanner() {
   const [itinerary, setItinerary] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  
+  const location = useLocation();
+
+  useEffect(() => {
+    if (location.state?.restore) {
+        const h = location.state.restore;
+        // Parse query if possible: "destination (start -> end)"
+        // Or use h.destination if available (SearchHistory has it?)
+        // Backend SearchHistory model has 'destination', 'searchDate' but maybe not separate 'startDate'/'endDate'
+        // But the 'query' string in GeminiController is formatted as "Dest (Start -> End)"
+        
+        let dest = h.destination || "";
+        let start = "";
+        let end = "";
+        
+        // Try parsing query string if structured
+        if (h.query && h.query.includes("(") && h.query.includes("→")) {
+            try {
+                // Example: "Paris (2025-01-01 → 2025-01-05)"
+                const parts = h.query.split("(");
+                if (parts.length > 0) {
+                     dest = parts[0].trim();
+                     const datePart = parts[1].replace(")", ""); // "2025-01-01 → 2025-01-05"
+                     const dates = datePart.split("→");
+                     if (dates.length === 2) {
+                         start = dates[0].trim();
+                         end = dates[1].trim();
+                     }
+                }
+            } catch (e) {
+                console.log("Error parsing history query", e);
+            }
+        }
+        setFormData({
+            destination: dest,
+            startDate: start,
+            endDate: end
+        });
+        
+        // Optionally auto-submit if we have all data?
+        // Let's just pre-fill for now to let user confirm.
+    }
+  }, [location.state]);
 
   const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
 
@@ -38,6 +82,8 @@ export default function ItineraryPlanner() {
     }).filter(day => day.title);
   }, [itinerary]);
 
+  const today = new Date().toISOString().split("T")[0];
+
   return (
     <div className="planner-wrapper">
       <Navbar />
@@ -63,11 +109,25 @@ export default function ItineraryPlanner() {
             <div className="field-row">
               <div className="field">
                 <label>Start Date</label>
-                <input type="date" name="startDate" value={formData.startDate} onChange={handleChange} required />
+                <input 
+                  type="date" 
+                  name="startDate" 
+                  value={formData.startDate} 
+                  min={today}
+                  onChange={handleChange} 
+                  required 
+                />
               </div>
               <div className="field">
                 <label>End Date</label>
-                <input type="date" name="endDate" value={formData.endDate} onChange={handleChange} required />
+                <input 
+                  type="date" 
+                  name="endDate" 
+                  value={formData.endDate} 
+                  min={formData.startDate || today}
+                  onChange={handleChange} 
+                  required 
+                />
               </div>
             </div>
             <button className="btn-primary" disabled={loading}>

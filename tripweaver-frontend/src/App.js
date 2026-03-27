@@ -6,12 +6,18 @@ import Signin from "./components/Signin";
 import Signup from "./components/Signup";
 import DestinationSearch from "./components/DestinationSearch";
 import Explore from "./components/Explore";
+import LandingPage from "./components/LandingPage";
 import Trips from "./components/Trips";
 import ItineraryPlanner from "./components/ItineraryPlanner";
 import UserProfile from "./components/UserProfile";
+import OpenTrips from "./components/OpenTrips";
 import Wishlist from "./components/Wishlist";
 import Cart from "./components/Cart";
-import OAuthSuccess from "./components/OAuthSuccess";
+import PaymentPage from "./components/PaymentPage";
+import Bookings from "./components/Bookings";
+import Chatbot from "./components/Chatbot";
+import ProtectedRoute from "./components/ProtectedRoute";
+
 import "./App.css";
 import "boxicons/css/boxicons.min.css";
 
@@ -19,16 +25,18 @@ function Layout() {
   const [isSignup, setIsSignup] = useState(false);
   const location = useLocation();
 
-  // ❌ Hide navbar on signup page
+  // Hide navbar and chatbot on signup page
   const hideNavbar = location.pathname === "/signup";
+  const hideChatbot = location.pathname === "/signup" || location.pathname === "/signin" || location.pathname === "/";
 
   return (
     <>
       {!hideNavbar && <Navbar />}
 
       <Routes>
-        {/* HOME */}
-        <Route path="/" element={<Explore />} />
+        {/* HOME - NEW LANDING PAGE */}
+        <Route path="/" element={<LandingPage />} />
+        <Route path="/explore" element={<Explore />} />
 
         {/* LOGIN / SIGNUP */}
         <Route
@@ -71,18 +79,23 @@ function Layout() {
           }
         />
 
-        {/* OTHER PAGES */}
-        <Route path="/search" element={<DestinationSearch />} />
-        <Route path="/planner" element={<ItineraryPlanner />} />
-        <Route path="/trips" element={<Trips />} />
-        <Route path="/profile" element={<UserProfile />} />
-        <Route path="/oauth-success" element={<OAuthSuccess />} />
-        <Route path="/wishlist" element={<Wishlist />} />
-        <Route path="/cart" element={<Cart />} />
+        {/* OTHER PAGES - PROTECTED */}
+        <Route path="/search" element={<ProtectedRoute><DestinationSearch /></ProtectedRoute>} />
+        <Route path="/planner" element={<ProtectedRoute><ItineraryPlanner /></ProtectedRoute>} />
+        <Route path="/trips" element={<ProtectedRoute><Trips /></ProtectedRoute>} />
+        <Route path="/profile" element={<ProtectedRoute><UserProfile /></ProtectedRoute>} />
+        <Route path="/open-trips" element={<ProtectedRoute><OpenTrips /></ProtectedRoute>} />
+        <Route path="/wishlist" element={<ProtectedRoute><Wishlist /></ProtectedRoute>} />
+        <Route path="/cart" element={<ProtectedRoute><Cart /></ProtectedRoute>} />
+        <Route path="/payment" element={<ProtectedRoute><PaymentPage /></ProtectedRoute>} />
+        <Route path="/bookings" element={<ProtectedRoute><Bookings /></ProtectedRoute>} />
 
         {/* FALLBACK */}
-        <Route path="*" element={<Navigate to="/signup" />} />
+        <Route path="*" element={<Navigate to="/" />} />
       </Routes>
+
+      {/* Chatbot floating on all pages except signup/login/landing */}
+      {!hideChatbot && <Chatbot />}
     </>
   );
 }

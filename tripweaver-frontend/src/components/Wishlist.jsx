@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 import Navbar from "./navbar";
-
-const API_BASE = "http://localhost:8090/api";
+import CustomModal from "./CustomModal";
+import API_BASE from "../config";
 
 export default function Wishlist() {
     const [savedTrips, setSavedTrips] = useState([]);
@@ -14,13 +14,28 @@ export default function Wishlist() {
     const [selectedHotel, setSelectedHotel] = useState(null);
     const [showGallery, setShowGallery] = useState(null);
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
+    
+    // Custom modal state
+    const [modal, setModal] = useState({
+        show: false,
+        title: "",
+        message: "",
+        type: "info",
+        onConfirm: null
+    });
 
-    useEffect(() => {
-        fetchSavedTrips();
-    }, []);
+    const username = sessionStorage.getItem("username");
+    const cartKey = username ? `cart-${username}` : "cart";
 
-    const fetchSavedTrips = async () => {
-        const username = sessionStorage.getItem("username");
+    const showModal = (title, message, type = "info", onConfirm = null) => {
+        setModal({ show: true, title, message, type, onConfirm });
+    };
+
+    const closeModal = () => {
+        setModal({ show: false, title: "", message: "", type: "info", onConfirm: null });
+    };
+
+    const fetchSavedTrips = React.useCallback(async () => {
         if (!username) {
             setSavedTrips([]);
             setLoading(false);
@@ -37,12 +52,16 @@ export default function Wishlist() {
         } finally {
             setLoading(false);
         }
-    };
+    }, [username]);
+
+    useEffect(() => {
+        fetchSavedTrips();
+    }, [fetchSavedTrips]);
 
     const handleDelete = async (id) => {
         const username = sessionStorage.getItem("username");
         if (!username) {
-            alert("Please log in to manage your wishlist.");
+            showModal("Login Required", "Please log in to manage your wishlist.", "warning");
             return;
         }
         try {
@@ -51,9 +70,10 @@ export default function Wishlist() {
                 withCredentials: true
             });
             setSavedTrips((prev) => prev.filter((t) => t.id !== id));
+            showModal("Deleted", "Trip removed from wishlist successfully.", "success");
         } catch (err) {
             console.error("Failed to delete trip", err);
-            alert("Failed to delete from wishlist. Please try again.");
+            showModal("Delete Failed", "Failed to delete from wishlist. Please try again.", "error");
         }
     };
 
@@ -134,7 +154,10 @@ export default function Wishlist() {
 
         if (hotel.placeId) {
             try {
-                const res = await axios.get(`${API_BASE}/destination/photos/${hotel.placeId}`);
+                const res = await axios.get(
+                    `${API_BASE}/destination/photos/${hotel.placeId}`,
+                    { withCredentials: true }
+                );
                 const urls = res.data || [];
                 if (urls.length > 0) {
                     setShowGallery(prev =>
@@ -172,10 +195,55 @@ export default function Wishlist() {
         }
     };
 
+    const handleAddToCart = (trip) => {
+        if (!username) {
+            showModal("Login Required", "Please login to use the cart.", "warning");
+            return;
+        }
+
+        const flight = trip.flightDetails ? JSON.parse(trip.flightDetails) : null;
+        const returnFlight = trip.returnFlightDetails ? JSON.parse(trip.returnFlightDetails) : null;
+        const hotel = trip.hotelDetails ? JSON.parse(trip.hotelDetails) : null;
+
+        const cartItem = {
+            id: Date.now(),
+            destination: trip.destination,
+            startDate: trip.startDate,
+            endDate: trip.endDate,
+            totalCost: trip.totalCost,
+            flight: flight,
+            returnFlight: returnFlight,
+            hotel: hotel,
+            nights: calculateNights(trip.startDate, trip.endDate)
+        };
+
+        const existingCart = JSON.parse(localStorage.getItem(cartKey) || "[]");
+        
+        // Optional: Check if already in cart
+        // const alreadyInCart = existingCart.some(item => item.destination === cartItem.destination && item.startDate === cartItem.startDate);
+        // if (alreadyInCart) { showModal("Already in Cart", "This trip is already in your cart!", "info"); return; }
+
+        localStorage.setItem(cartKey, JSON.stringify([...existingCart, cartItem]));
+        
+        // Dispatch storage event to notify other components (like Navbar)
+        window.dispatchEvent(new Event("storage"));
+
+        showModal("Added to Cart", `${trip.destination} trip added successfully!`, "success");
+    };
+
+    const [errorImages, setErrorImages] = useState({});
+
+    const handleImageError = (id) => {
+        setErrorImages(prev => ({
+            ...prev,
+            [id]: "https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=800&q=80"
+        }));
+    };
+
     return (
         <div style={{
             minHeight: '100vh',
-            backgroundImage: 'url("https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?q=80&w=2070&auto=format&fit=crop")',
+            backgroundImage: 'linear-gradient(rgba(255, 240, 245, 0.7), rgba(255, 235, 245, 0.7)), url("https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?w=1920&q=80")',
             backgroundSize: 'cover',
             backgroundPosition: 'center',
             backgroundAttachment: 'fixed',
@@ -184,25 +252,27 @@ export default function Wishlist() {
             <Navbar />
             <div style={{ maxWidth: '1200px', margin: '100px auto 0', padding: '20px' }}>
                 <h2 style={{
-                    color: 'white',
-                    textShadow: '0 2px 4px rgba(0,0,0,0.5)',
-                    borderBottom: '2px solid rgba(255,255,255,0.5)',
+                    color: '#1a1a1a',
+                    textShadow: '0 2px 4px rgba(255,255,255,0.9)',
+                    borderBottom: '2px solid rgba(0,0,0,0.15)',
                     paddingBottom: '15px',
-                    marginBottom: '30px'
+                    marginBottom: '30px',
+                    fontWeight: 'bold'
                 }}>
                     ❤️ My Wishlist
                 </h2>
 
                 {loading ? (
-                    <p style={{ color: 'white' }}>Loading saved trips...</p>
+                    <p style={{ color: '#1a1a1a', fontWeight: '500' }}>Loading saved trips...</p>
                 ) : savedTrips.length === 0 ? (
                     <div style={{
                         textAlign: 'center',
-                        color: 'white',
-                        background: 'rgba(0,0,0,0.6)',
+                        color: '#1a1a1a',
+                        background: 'rgba(255,255,255,0.95)',
                         padding: '40px',
                         borderRadius: '12px',
-                        marginTop: '50px'
+                        marginTop: '50px',
+                        boxShadow: '0 4px 15px rgba(0,0,0,0.15)'
                     }}>
                         <h3>No saved trips found.</h3>
                         <p>Start planning and save your favorite itineraries!</p>
@@ -224,9 +294,14 @@ export default function Wishlist() {
                                     display: 'flex',
                                     flexDirection: 'column'
                                 }}>
-                                    {hotelImage ? (
-                                        <div style={{ position: 'relative', height: '200px', width: '100%', overflow: 'hidden' }}>
-                                            <img src={hotelImage} alt={hotel.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                    <div style={{ position: 'relative', height: '200px', width: '100%', overflow: 'hidden' }}>
+                                        <img 
+                                            src={errorImages[trip.id] || hotelImage || "https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=800&q=60"} 
+                                            alt={hotel.name || trip.destination} 
+                                            onError={() => handleImageError(trip.id)}
+                                            style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                                        />
+                                        {hotel.name && (
                                             <button 
                                                 onClick={(e) => { e.stopPropagation(); openGallery(hotel); }}
                                                 style={{
@@ -238,12 +313,8 @@ export default function Wishlist() {
                                             >
                                                 📷 View Rooms
                                             </button>
-                                        </div>
-                                    ) : (
-                                        <div style={{ height: '100px', background: '#eee', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#888' }}>
-                                            No Hotel Image
-                                        </div>
-                                    )}
+                                        )}
+                                    </div>
 
                                     <div style={{ padding: '20px', flex: 1, display: 'flex', flexDirection: 'column' }}>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
@@ -264,7 +335,14 @@ export default function Wishlist() {
                                             >
                                                 View Details
                                             </button>
-                                            <button onClick={() => handleDelete(trip.id)} style={{ padding: '10px 15px', background: '#ff4444', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
+                                            <button
+                                                onClick={() => handleAddToCart(trip)}
+                                                style={{ padding: '10px 15px', background: '#4CAF50', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
+                                                title="Add to Cart"
+                                            >
+                                                🛒
+                                            </button>
+                                            <button onClick={() => handleDelete(trip.id)} style={{ padding: '10px 15px', background: '#ff4444', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }} title="Delete">
                                                 🗑️
                                             </button>
                                         </div>
@@ -470,6 +548,16 @@ export default function Wishlist() {
                     </div>
                 </div>
             )}
+
+            {/* Custom Modal */}
+            <CustomModal
+                show={modal.show}
+                title={modal.title}
+                message={modal.message}
+                type={modal.type}
+                onConfirm={modal.onConfirm}
+                onClose={closeModal}
+            />
         </div>
     );
 }

@@ -1,7 +1,9 @@
 import React, { useState, useRef } from "react";
 import axios from "axios";
 import Navbar from "./navbar";
+import CustomModal from "./CustomModal";
 import "./DestinationSearch.css";
+import API_BASE from "../config";
 
 export default function DestinationSearch() {
   const resultsRef = useRef(null);
@@ -16,8 +18,22 @@ export default function DestinationSearch() {
   const [modalImages, setModalImages] = useState([]);
   const [modalTitle, setModalTitle] = useState("");
   const [currentIndex, setCurrentIndex] = useState(0);
+  
+  // Custom modal state
+  const [customModal, setCustomModal] = useState({
+    show: false,
+    title: "",
+    message: "",
+    type: "info"
+  });
 
-  const API_BASE = "http://localhost:8090/api";
+  const showModal = (title, message, type = "info") => {
+    setCustomModal({ show: true, title, message, type });
+  };
+
+  const closeModal = () => {
+    setCustomModal({ show: false, title: "", message: "", type: "info" });
+  };
 
   // Search destinations
   const handleSearch = async () => {
@@ -34,7 +50,7 @@ export default function DestinationSearch() {
         query
       )}&category=${encodeURIComponent(category)}`;
 
-      const res = await axios.get(url);
+      const res = await axios.get(url, { withCredentials: true });
 
       const normalized = (res.data || []).map((d) => ({
         name: d.name || "Unknown Place",
@@ -70,16 +86,17 @@ export default function DestinationSearch() {
   // View more images
   const handleViewMore = async (destination) => {
     if (!destination.placeId) {
-      alert("No Place ID available for this destination.");
+      showModal("No Place ID", "No Place ID available for this destination.", "warning");
       return;
     }
 
     try {
       const res = await axios.get(
-        `${API_BASE}/destination/photos/${destination.placeId}`
+        `${API_BASE}/destination/photos/${destination.placeId}`,
+        { withCredentials: true }
       );
       if (!res.data || res.data.length === 0) {
-        alert("No photos available for this destination.");
+        showModal("No Photos", "No photos available for this destination.", "info");
         return;
       }
       setModalImages(res.data);
@@ -88,46 +105,93 @@ export default function DestinationSearch() {
       setCurrentIndex(0); // Start from first image
     } catch (err) {
       console.error(err);
-      alert("Failed to fetch more images.");
+      showModal("Fetch Failed", "Failed to fetch more images.", "error");
     }
   };
 
   return (
-    <div className="explore-container">
+    <div className="explore-container" style={{
+      minHeight: '100vh',
+      backgroundImage: 'url("https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=1920&q=80")',
+      backgroundSize: 'cover',
+      backgroundPosition: 'center',
+      backgroundAttachment: 'fixed',
+      paddingBottom: '40px',
+      position: 'relative'
+    }}>
+      {/* Light overlay */}
+      <div style={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.4), rgba(240, 248, 255, 0.4))',
+        zIndex: 0
+      }}></div>
+
       <Navbar />
       <div style={{ height: "70px" }}></div>
 
-      <div className="main-content">
-        <h2>Destination Finder</h2>
+      <div className="main-content" style={{ position: 'relative', zIndex: 1 }}>
+        {/* Title Card */}
+        <div style={{ textAlign: 'center', marginBottom: '40px' }}>
+          <h2 style={{
+            display: 'inline-block',
+            background: 'rgba(255, 255, 255, 0.9)',
+            backdropFilter: 'blur(20px)',
+            padding: '20px 70px',
+            borderRadius: '20px',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.1)',
+            color: '#1a1a1a',
+            fontSize: '2.8rem',
+            fontWeight: '600',
+            margin: 0,
+            border: '1px solid rgba(255, 255, 255, 0.6)'
+          }}>Destination Finder</h2>
+        </div>
 
-        <form
-          className="search-box"
-          onSubmit={(e) => {
-            e.preventDefault();
-            handleSearch();
-          }}
-        >
-          <input
-            type="text"
-            placeholder="Search a city, country, or landmark"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-
-          <select
-            className="search-select"
-            value={category}
-            onChange={(e) => setCategory(e.target.value)}
+        {/* Search Form Card */}
+        <div style={{
+          maxWidth: '900px',
+          width: '90%',
+          margin: '0 auto 50px',
+          background: 'rgba(255, 255, 255, 0.25)',
+          backdropFilter: 'blur(20px)',
+          padding: '40px 50px',
+          borderRadius: '30px',
+          boxShadow: '0 10px 40px rgba(0,0,0,0.15)',
+          border: '1px solid rgba(255, 255, 255, 0.4)'
+        }}>
+          <form
+            className="search-box"
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleSearch();
+            }}
           >
-            <option value="tourist_attraction">Tourist Spots</option>
-            <option value="accommodation">Hotels & Stays</option>
-            <option value="restaurant">Restaurants & Food</option>
-          </select>
+            <input
+              type="text"
+              placeholder="Search a city, country, or landmark"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
 
-          <button className="search-btn" type="submit" disabled={loading}>
-            {loading ? "Searching..." : "Search"}
-          </button>
-        </form>
+            <select
+              className="search-select"
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+            >
+              <option value="tourist_attraction">Tourist Spots</option>
+              <option value="accommodation">Hotels & Stays</option>
+              <option value="restaurant">Restaurants & Food</option>
+            </select>
+
+            <button className="search-btn" type="submit" disabled={loading}>
+              {loading ? "Searching..." : "Search"}
+            </button>
+          </form>
+        </div>
 
         {error && <p className="error-message">⚠️ {error}</p>}
 
@@ -162,6 +226,30 @@ export default function DestinationSearch() {
                   </span>
                 </span>
               </div>
+              
+              {/* Location Icon for Google Maps */}
+              {(d.latitude && d.longitude) && (
+                <a
+                  href={`https://www.google.com/maps/search/?api=1&query=${d.latitude},${d.longitude}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '3px',
+                    color: '#7b68ee',
+                    textDecoration: 'none',
+                    fontSize: '0.85rem',
+                    marginTop: '5px',
+                    marginBottom: '5px',
+                    fontWeight: '500'
+                  }}
+                >
+                  <span style={{ fontSize: '1rem' }}>📍</span>
+                  View on Google Maps
+                </a>
+              )}
+              
               <button
                 className="view-more-btn"
                 onClick={() => handleViewMore(d)}
@@ -227,6 +315,15 @@ export default function DestinationSearch() {
           </div>
         </div>
       )}
+
+      {/* Custom Modal */}
+      <CustomModal
+        show={customModal.show}
+        title={customModal.title}
+        message={customModal.message}
+        type={customModal.type}
+        onClose={closeModal}
+      />
     </div>
   );
 }

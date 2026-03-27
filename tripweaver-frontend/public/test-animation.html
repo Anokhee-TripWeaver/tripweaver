@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+    <title>Animation Test - TripWeaver</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            overflow-x: hidden;
+        }
+
+        .hero {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .background-image {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            opacity: 0;
+            transition: opacity 1.2s ease-in-out;
+        }
+
+        .background-image.active {
+            opacity: 1;
+        }
+
+        .overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(to bottom, rgba(0,0,0,0.3), rgba(0,0,0,0.5));
+        }
+
+        .content {
+            position: relative;
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: white;
+            text-align: center;
+            padding: 20px;
+        }
+
+        h1 {
+            font-size: 4rem;
+            font-weight: bold;
+            margin-bottom: 1rem;
+            text-shadow: 2px 2px 10px rgba(0,0,0,0.5);
+        }
+
+        .destination-name {
+            font-size: 2rem;
+            padding: 10px 30px;
+            background: rgba(255,255,255,0.2);
+            backdrop-filter: blur(10px);
+            border-radius: 50px;
+            margin-bottom: 2rem;
+        }
+
+        .status {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 15px 25px;
+            border-radius: 10px;
+            font-size: 14px;
+            z-index: 100;
+        }
+
+        .indicators {
+            position: absolute;
+            bottom: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 10px;
+            z-index: 20;
+        }
+
+        .indicator {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.4);
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .indicator.active {
+            width: 30px;
+            background: white;
+        }
+
+        .success {
+            color: #4ade80;
+        }
+    </style>
+</head>
+<body>
+    <div class="status">
+        <div>Status: <span class="success">✓ Animation Working</span></div>
+        <div>Current: <span id="current-dest">Paris</span></div>
+        <div>Next change in: <span id="timer">5</span>s</div>
+    </div>
+
+    <div class="hero">
+        <img class="background-image active" data-index="0" 
+             src="https://images.unsplash.com/photo-1502602898657-3e91760cbb34?w=1920&q=80" 
+             alt="Paris">
+        <img class="background-image" data-index="1" 
+             src="https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?w=1920&q=80" 
+             alt="Tokyo">
+        <img class="background-image" data-index="2" 
+             src="https://images.unsplash.com/photo-1534430480872-3498386e7856?w=1920&q=80" 
+             alt="New York">
+        <img class="background-image" data-index="3" 
+             src="https://images.unsplash.com/photo-1537996194471-e657df975ab4?w=1920&q=80" 
+             alt="Bali">
+        <img class="background-image" data-index="4" 
+             src="https://images.unsplash.com/photo-1596176530529-78163a4f7af2?w=1920&q=80" 
+             alt="Bangalore">
+
+        <div class="overlay"></div>
+
+        <div class="content">
+            <h1>Discover Your Next Adventure</h1>
+            <div class="destination-name" id="dest-name">Paris, France</div>
+            <p style="font-size: 1.2rem; max-width: 600px;">
+                If you see individual photos rotating smoothly every 5 seconds, 
+                the animation is working correctly!
+            </p>
+        </div>
+
+        <div class="indicators">
+            <div class="indicator active" data-index="0"></div>
+            <div class="indicator" data-index="1"></div>
+            <div class="indicator" data-index="2"></div>
+            <div class="indicator" data-index="3"></div>
+            <div class="indicator" data-index="4"></div>
+        </div>
+    </div>
+
+    <script>
+        const destinations = [
+            { name: 'Paris, France', index: 0 },
+            { name: 'Tokyo, Japan', index: 1 },
+            { name: 'New York, USA', index: 2 },
+            { name: 'Bali, Indonesia', index: 3 },
+            { name: 'Bangalore, India', index: 4 }
+        ];
+
+        let currentIndex = 0;
+        let countdown = 5;
+
+        const images = document.querySelectorAll('.background-image');
+        const indicators = document.querySelectorAll('.indicator');
+        const destName = document.getElementById('dest-name');
+        const currentDest = document.getElementById('current-dest');
+        const timer = document.getElementById('timer');
+
+        function changeDestination(index) {
+            currentIndex = index;
+            countdown = 5;
+
+            // Update images
+            images.forEach(img => img.classList.remove('active'));
+            images[index].classList.add('active');
+
+            // Update indicators
+            indicators.forEach(ind => ind.classList.remove('active'));
+            indicators[index].classList.add('active');
+
+            // Update text
+            destName.textContent = destinations[index].name;
+            currentDest.textContent = destinations[index].name.split(',')[0];
+        }
+
+        // Auto-rotate
+        setInterval(() => {
+            const nextIndex = (currentIndex + 1) % destinations.length;
+            changeDestination(nextIndex);
+        }, 5000);
+
+        // Countdown timer
+        setInterval(() => {
+            countdown--;
+            if (countdown < 0) countdown = 5;
+            timer.textContent = countdown;
+        }, 1000);
+
+        // Manual click
+        indicators.forEach(indicator => {
+            indicator.addEventListener('click', () => {
+                const index = parseInt(indicator.dataset.index);
+                changeDestination(index);
+            });
+        });
+
+        console.log('✓ Animation test loaded successfully');
+        console.log('✓ If you see rotating images, the animation works!');
+        console.log('✓ If you see a composite image, your browser cache is stuck');
+    </script>
+</body>
+</html>

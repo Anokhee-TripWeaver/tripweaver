@@ -1,0 +1,125 @@
+/* Custom Modal Overlay */
+.custom-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(4px);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 10000;
+    animation: fadeIn 0.2s ease-out;
+}
+
+/* Modal Content */
+.custom-modal-content {
+    background: white;
+    border-radius: 20px;
+    padding: 30px;
+    max-width: 450px;
+    width: 90%;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    animation: slideUp 0.3s ease-out;
+    position: relative;
+}
+
+/* Icon */
+.custom-modal-icon {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    margin: 0 auto 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 30px;
+    font-weight: bold;
+}
+
+/* Title */
+.custom-modal-title {
+    margin: 0 0 15px 0;
+    font-size: 1.5rem;
+    font-weight: 700;
+    text-align: center;
+    color: #2c3e50;
+}
+
+/* Message */
+.custom-modal-message {
+    margin: 0 0 25px 0;
+    font-size: 1rem;
+    line-height: 1.6;
+    text-align: center;
+    color: #555;
+}
+
+/* Buttons Container */
+.custom-modal-buttons {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+}
+
+/* Button Base */
+.custom-modal-btn {
+    padding: 12px 24px;
+    border: none;
+    border-radius: 10px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.custom-modal-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.custom-modal-btn:active {
+    transform: translateY(0);
+}
+
+/* Confirm Button */
+.custom-modal-btn-confirm {
+    flex: 1;
+    color: white;
+}
+
+/* Cancel Button */
+.custom-modal-btn-cancel {
+    flex: 1;
+    background: #e0e0e0;
+    color: #333;
+}
+
+/* OK Button */
+.custom-modal-btn-ok {
+    padding: 12px 40px;
+    color: white;
+}
+
+/* Animations */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}

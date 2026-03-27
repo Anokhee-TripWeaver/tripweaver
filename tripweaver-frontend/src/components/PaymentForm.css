@@ -1,0 +1,97 @@
+/* Form */
+.payment-form {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+/* Stripe header */
+.stripe-header {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    font-size: 14px;
+    color: #555;
+}
+
+.stripe-header img {
+    height: 22px;
+}
+
+/* Test mode box */
+.test-mode-box {
+    background-color: #f1f8ff;
+    border: 1px dashed #90caf9;
+    border-radius: 10px;
+    padding: 14px;
+    font-size: 14px;
+}
+
+.test-title {
+    margin-bottom: 8px;
+    font-weight: 600;
+    color: #1565c0;
+}
+
+/* Card rows */
+.card-row {
+    display: flex;
+    gap: 12px;
+}
+
+/* Card field */
+.card-field {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 12px;
+    border: 1px solid #cfd8dc;
+    border-radius: 10px;
+    background-color: #fafafa;
+}
+
+.card-field label {
+    font-size: 13px;
+    font-weight: 600;
+    color: #555;
+}
+
+/* ZIP input */
+.zip-input {
+    padding: 10px;
+    font-size: 15px;
+    border: none;
+    outline: none;
+    background: transparent;
+}
+
+/* Pay button */
+.pay-button {
+    margin-top: 10px;
+    padding: 14px;
+    background: linear-gradient(135deg, #1e88e5, #1565c0);
+    color: #fff;
+    font-size: 16px;
+    font-weight: 600;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+}
+
+.pay-button:hover {
+    box-shadow: 0 6px 16px rgba(30, 136, 229, 0.3);
+}
+
+.pay-button:disabled {
+    background: #bdbdbd;
+    cursor: not-allowed;
+}
+
+/* Error */
+.payment-error {
+    color: #d32f2f;
+    font-size: 14px;
+    text-align: center;
+}

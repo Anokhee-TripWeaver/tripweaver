@@ -38,17 +38,11 @@ public class FlightService {
         try {
             String token = getAccessToken();
             if (token != null) {
-                System.out.println("Token received: " + token.substring(0, 10) + "...");
-                System.out.println("Resolving IATA codes for: " + origin + ", " + destination);
-                
                 // Resolve IATA codes if input is not 3 characters
                 String originCode = resolveIataCode(origin, token);
                 String destCode = resolveIataCode(destination, token);
-                
-                System.out.println("Resolved IATA: " + origin + "->" + originCode + ", " + destination + "->" + destCode);
 
                 if (originCode == null || destCode == null) {
-                     System.out.println("Could not resolve IATA codes.");
                      return mockFlights(origin, destination, date);
                 }
 
@@ -60,22 +54,17 @@ public class FlightService {
                         + "&currencyCode=INR"
                         + "&max=5";
 
-                System.out.println("Calling URL: " + url);
-
                 HttpHeaders headers = new HttpHeaders();
                 headers.setBearerAuth(token);
                 HttpEntity<String> entity = new HttpEntity<>(headers);
 
                 try {
                     ResponseEntity<String> response = restTemplate.exchange(url, org.springframework.http.HttpMethod.GET, entity, String.class);
-                    System.out.println("Amadeus Response Status: " + response.getStatusCode());
-                    // System.out.println("Amadeus Response Body: " + response.getBody()); // Uncomment for full debug
 
                     if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
                         JSONObject json = new JSONObject(response.getBody());
                         if (json.has("data")) {
                             JSONArray data = json.getJSONArray("data");
-                            System.out.println("Found " + data.length() + " flight offers.");
                             for (int i = 0; i < data.length(); i++) {
                             JSONObject offer = data.getJSONObject(i);
                             JSONArray itineraries = offer.getJSONArray("itineraries");
@@ -119,18 +108,15 @@ public class FlightService {
                     }
                 }
                 } catch (Exception e) {
-                    System.out.println("Amadeus API request failed: " + e.getMessage());
-                    e.printStackTrace();
+                    System.err.println("Amadeus API request failed: " + e.getMessage());
                 }
             }
         } catch (Exception e) {
-            e.printStackTrace();
-            System.out.println("Amadeus API failed, falling back to mock data.");
+            System.err.println("Amadeus API failed, falling back to mock data.");
         }
 
         // Fallback mock if API fails or returns no results
         if (flights.isEmpty()) {
-            System.out.println("No flights found via API, returning mock data.");
             flights = mockFlights(origin, destination, date);
         }
 
@@ -236,16 +222,12 @@ public class FlightService {
                     + "?subType=CITY,AIRPORT"
                     + "&keyword=" + location
                     + "&page[limit]=1";
-            
-            System.out.println("Resolving " + location + " via URL: " + url);
 
             HttpHeaders headers = new HttpHeaders();
             headers.setBearerAuth(token);
             HttpEntity<String> entity = new HttpEntity<>(headers);
 
             ResponseEntity<String> response = restTemplate.exchange(url, org.springframework.http.HttpMethod.GET, entity, String.class);
-            
-            // System.out.println("Resolve Response: " + response.getBody()); // Debug
 
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
                 JSONObject json = new JSONObject(response.getBody());
@@ -257,8 +239,7 @@ public class FlightService {
                 }
             }
         } catch (Exception e) {
-            System.out.println("Failed to resolve IATA code for: " + location);
-            e.printStackTrace();
+            System.err.println("Failed to resolve IATA code for: " + location);
         }
         
         return null; // Could not resolve

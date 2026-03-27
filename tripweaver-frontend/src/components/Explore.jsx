@@ -27,8 +27,8 @@ export default function Explore() {
       <Navbar />
 
       {/* HERO SECTION */}
-      <section className="hero">
-        <div className="hero-content">
+      <section className="explore-hero">
+        <div className="explore-hero-content">
           <h1><strong>Discover Your Next Adventure</strong> 🚀</h1>
           <p><strong>Explore more.</strong> Dream more. <span className="explore-word"><strong>Explore</strong> with TripWeaver.</span></p>
           <button className="get-started" onClick={goToExplore}>
