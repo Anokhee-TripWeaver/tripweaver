@@ -4,6 +4,7 @@ import { FaHeart, FaShoppingCart } from "react-icons/fa";
 import axios from "axios";
 import "./navbar.css";
 import { persistIdentity, resolveProfileEmail, resolveProfileName } from "../utils/userIdentity";
+import API_BASE, { ENABLE_BACKEND_STATUS_CHECK, LOGOUT_URL } from "../config";
 
 axios.defaults.withCredentials = true;
 
@@ -16,8 +17,13 @@ export default function Navbar() {
 
   // 🔹 Check backend session (OAuth / normal login)
   useEffect(() => {
+    if (!ENABLE_BACKEND_STATUS_CHECK) {
+      fallbackSessionCheck();
+      return;
+    }
+
     axios
-      .get("http://localhost:8090/api/profile/status", {
+      .get(`${API_BASE}/profile/status`, {
         withCredentials: true
       })
       .then(res => {
@@ -54,7 +60,9 @@ export default function Navbar() {
   // 🔹 Logout (backend + frontend cleanup)
   const logout = () => {
     sessionStorage.clear();
-    window.location.href = "http://localhost:8090/logout";
+    localStorage.removeItem("username");
+    localStorage.removeItem("email");
+    window.location.href = LOGOUT_URL;
   };
 
   return (

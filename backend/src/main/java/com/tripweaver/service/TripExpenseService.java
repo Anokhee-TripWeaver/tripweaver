@@ -31,8 +31,10 @@ public class TripExpenseService {
         LinkedHashMap<String, String> byEmail = new LinkedHashMap<>();
         addMember(byEmail, trip.getHostEmail(), trip.getHostName());
 
-        List<JoinRequest> accepted = joinRequestRepository.findByPostIdAndStatusIgnoreCaseOrderByCreatedAtAsc(tripId, "ACCEPTED");
-        for (JoinRequest req : accepted) {
+        // Include accepted + pending joiners so split lists show everyone who expressed interest
+        List<JoinRequest> acceptedOrPending = joinRequestRepository.findByPostIdAndStatusIgnoreCaseOrderByCreatedAtAsc(tripId, "ACCEPTED");
+        acceptedOrPending.addAll(joinRequestRepository.findByPostIdAndStatusIgnoreCaseOrderByCreatedAtAsc(tripId, "PENDING"));
+        for (JoinRequest req : acceptedOrPending) {
             addMember(byEmail, req.getRequesterEmail(), req.getRequesterName());
         }
 
@@ -63,9 +65,8 @@ public class TripExpenseService {
         if (paidByEmail.isBlank()) {
             throw new RuntimeException("paidByEmail is required");
         }
-        if (!memberEmails.contains(paidByEmail)) {
-            throw new RuntimeException("Payer must be a trip member");
-        }
+        // Auto-add payer to members if missing to avoid rejection when join list is incomplete
+        memberEmails.add(paidByEmail);
 
         String paidByName = trim((String) payload.get("paidByName"));
         if (paidByName.isBlank()) {
@@ -76,6 +77,8 @@ public class TripExpenseService {
         if (splitBetween.isEmpty()) {
             splitBetween = new ArrayList<>(memberEmails);
         }
+        // Ensure split between includes payer and all entered emails, even if not in join list yet
+        splitBetween.add(paidByEmail);
         splitBetween = splitBetween.stream()
                 .map(this::normalize)
                 .filter(memberEmails::contains)
@@ -248,4 +251,3 @@ public class TripExpenseService {
         return value == null ? BigDecimal.ZERO : value;
     }
 }
-

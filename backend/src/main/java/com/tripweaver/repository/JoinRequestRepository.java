@@ -8,7 +8,9 @@ import java.util.Optional;
 
 public interface JoinRequestRepository extends JpaRepository<JoinRequest, Long> {
     List<JoinRequest> findByHostEmailIgnoreCaseOrderByCreatedAtDesc(String hostEmail);
+    List<JoinRequest> findByHostNameIgnoreCaseOrderByCreatedAtDesc(String hostName);
     List<JoinRequest> findByRequesterEmailIgnoreCaseOrderByCreatedAtDesc(String requesterEmail);
+    List<JoinRequest> findByRequesterNameIgnoreCaseOrderByCreatedAtDesc(String requesterName);
     List<JoinRequest> findByPostIdAndStatusIgnoreCaseOrderByCreatedAtAsc(Long postId, String status);
     Optional<JoinRequest> findFirstByPostIdAndHostEmailIgnoreCaseAndRequesterEmailIgnoreCaseAndStatusIgnoreCase(
             Long postId, String hostEmail, String requesterEmail, String status

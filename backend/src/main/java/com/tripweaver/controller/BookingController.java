@@ -39,17 +39,17 @@ public class BookingController {
     @GetMapping("/my-bookings")
     public ResponseEntity<List<Booking>> getMyBookings(Principal principal, @RequestParam(required = false) String username) {
         String finalUsername = null;
-        if (principal != null) {
+
+        // If username is explicitly requested, honor it (used for joined/shared-trip views).
+        if (username != null && !username.isBlank()) {
+            finalUsername = username;
+        } else if (principal != null) {
             String email = SecurityUtil.getEmail(principal);
-             if (email != null) {
+            if (email != null) {
                 finalUsername = email;
             } else {
                 finalUsername = principal.getName();
             }
-        }
-        
-        if (finalUsername == null && username != null) {
-            finalUsername = username;
         }
         
         if (finalUsername == null) {

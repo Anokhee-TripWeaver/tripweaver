@@ -2,6 +2,7 @@ import React, { useState, useRef } from "react";
 import axios from "axios";
 import Navbar from "./navbar";
 import "./DestinationSearch.css";
+import API_BASE from "../config";
 
 export default function DestinationSearch() {
   const resultsRef = useRef(null);
@@ -23,8 +24,6 @@ export default function DestinationSearch() {
     "Family-friendly places in Manali",
     "Romantic spots in Singapore",
   ];
-
-  const API_BASE = "http://localhost:8090/api";
 
   const buildFallbackImages = (seedText) => {
     const seed = encodeURIComponent(seedText || query || "travel destination");
@@ -51,7 +50,7 @@ export default function DestinationSearch() {
         query
       )}&category=${encodeURIComponent(category)}`;
 
-      const res = await axios.get(url);
+      const res = await axios.get(url, { withCredentials: true });
 
       const normalized = (res.data || []).map((d) => ({
         name: d.name || "Unknown Place",
@@ -97,7 +96,8 @@ export default function DestinationSearch() {
 
     try {
       const res = await axios.get(
-        `${API_BASE}/destination/photos/${destination.placeId}`
+        `${API_BASE}/destination/photos/${destination.placeId}`,
+        { withCredentials: true }
       );
       const list = Array.isArray(res?.data) && res.data.length > 0 ? res.data : fallback;
       setModalImages(list);

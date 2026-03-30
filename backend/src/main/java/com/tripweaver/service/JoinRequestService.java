@@ -6,7 +6,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 @Service
@@ -15,12 +17,20 @@ public class JoinRequestService {
     @Autowired
     private JoinRequestRepository repository;
 
-    public List<JoinRequest> getForHost(String hostEmail) {
-        return repository.findByHostEmailIgnoreCaseOrderByCreatedAtDesc(hostEmail);
+    public List<JoinRequest> getForHost(String hostIdentity) {
+        String key = normalize(hostIdentity);
+        if (key.isBlank()) return List.of();
+        List<JoinRequest> byEmail = repository.findByHostEmailIgnoreCaseOrderByCreatedAtDesc(key);
+        List<JoinRequest> byName = repository.findByHostNameIgnoreCaseOrderByCreatedAtDesc(key);
+        return dedupeById(byEmail, byName);
     }
 
-    public List<JoinRequest> getForRequester(String requesterEmail) {
-        return repository.findByRequesterEmailIgnoreCaseOrderByCreatedAtDesc(requesterEmail);
+    public List<JoinRequest> getForRequester(String requesterIdentity) {
+        String key = normalize(requesterIdentity);
+        if (key.isBlank()) return List.of();
+        List<JoinRequest> byEmail = repository.findByRequesterEmailIgnoreCaseOrderByCreatedAtDesc(key);
+        List<JoinRequest> byName = repository.findByRequesterNameIgnoreCaseOrderByCreatedAtDesc(key);
+        return dedupeById(byEmail, byName);
     }
 
     public JoinRequest create(JoinRequest request) {
@@ -60,5 +70,15 @@ public class JoinRequestService {
     private String normalize(String value) {
         return value == null ? "" : value.trim().toLowerCase();
     }
-}
 
+    private List<JoinRequest> dedupeById(List<JoinRequest> primary, List<JoinRequest> secondary) {
+        Map<Long, JoinRequest> merged = new LinkedHashMap<>();
+        for (JoinRequest req : primary) {
+            if (req != null && req.getId() != null) merged.put(req.getId(), req);
+        }
+        for (JoinRequest req : secondary) {
+            if (req != null && req.getId() != null) merged.putIfAbsent(req.getId(), req);
+        }
+        return List.copyOf(merged.values());
+    }
+}

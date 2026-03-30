@@ -18,11 +18,20 @@ import com.tripweaver.model.TripExpense;
 import com.tripweaver.service.CollaborationTripService;
 import com.tripweaver.service.EmailService;
 import com.tripweaver.service.JoinRequestService;
+import com.tripweaver.service.TripChatService;
 import com.tripweaver.service.TripExpenseService;
 
 @RestController
 @RequestMapping("/api/collaboration-trips")
-@CrossOrigin(origins = "http://localhost:3000", allowCredentials = "true")
+@CrossOrigin(
+        origins = {
+                "http://localhost:3000",
+                "http://127.0.0.1:3000",
+                "http://localhost:5173",
+                "http://127.0.0.1:5173"
+        },
+        allowCredentials = "true"
+)
 public class CollaborationTripController {
 
     @Autowired
@@ -36,6 +45,9 @@ public class CollaborationTripController {
 
     @Autowired
     private TripExpenseService tripExpenseService;
+
+    @Autowired
+    private TripChatService tripChatService;
 
     @GetMapping
     public List<CollaborationTrip> getAllTrips() {
@@ -63,6 +75,9 @@ public class CollaborationTripController {
     private boolean isValidEmail(String value) {
         return value != null && value.matches("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$");
     }
+    private boolean isNonBlank(String value) {
+        return value != null && !value.isBlank();
+    }
 
     private ResponseEntity<Map<String, String>> badRequest(String message) {
         Map<String, String> body = new HashMap<>();
@@ -73,8 +88,8 @@ public class CollaborationTripController {
     // requester clicks "I am interested"
     @PostMapping("/join-requests")
     public ResponseEntity<?> createJoinRequest(@RequestBody JoinRequest request) {
-        if (!isValidEmail(request.getHostEmail())) return badRequest("Host email is invalid");
-        if (!isValidEmail(request.getRequesterEmail())) return badRequest("Requester email is invalid");
+        if (!isNonBlank(request.getHostEmail())) return badRequest("Host identity is required");
+        if (!isNonBlank(request.getRequesterEmail())) return badRequest("Requester identity is required");
         if (request.getDestination() == null || request.getDestination().isBlank()) return badRequest("Destination is required");
         if (request.getStartDate() == null || request.getStartDate().isBlank() || request.getEndDate() == null || request.getEndDate().isBlank()) {
             return badRequest("Start and end dates are required");
@@ -164,6 +179,28 @@ public class CollaborationTripController {
                     "balances", Collections.emptyList(),
                     "settlements", Collections.emptyList()
             ));
+        }
+    }
+
+    @GetMapping("/{tripId}/chat")
+    public ResponseEntity<?> getTripChatMessages(@PathVariable Long tripId) {
+        try {
+            return ResponseEntity.ok(Map.of("messages", tripChatService.getMessages(tripId)));
+        } catch (Throwable ex) {
+            return ResponseEntity.ok(Map.of(
+                    "messages", Collections.emptyList(),
+                    "message", ex.getMessage() == null ? "Failed to load trip chat" : ex.getMessage()
+            ));
+        }
+    }
+
+    @PostMapping("/{tripId}/chat")
+    public ResponseEntity<?> addTripChatMessage(@PathVariable Long tripId, @RequestBody Map<String, Object> payload) {
+        try {
+            return ResponseEntity.ok(Map.of("message", tripChatService.addMessage(tripId, payload)));
+        } catch (Throwable ex) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of("message", ex.getMessage() == null ? "Failed to send trip chat message" : ex.getMessage()));
         }
     }
 

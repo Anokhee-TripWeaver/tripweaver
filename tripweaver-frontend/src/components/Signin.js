@@ -2,10 +2,10 @@ import React, { useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { persistIdentity, resolveProfileEmail, resolveProfileName } from "../utils/userIdentity";
+import API_BASE from "../config";
 
 export default function Signin() {
   const navigate = useNavigate();
-  const API_BASE = "http://localhost:8090/api";
   const isValidEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test((value || "").trim());
 
   const [formData, setFormData] = useState({
@@ -31,7 +31,7 @@ export default function Signin() {
 
     setLoading(true);
     try {
-      await axios.post(`${API_BASE}/auth/signin`, formData);
+      await axios.post(`${API_BASE}/auth/signin`, formData, { withCredentials: true });
       try {
         const profileRes = await axios.get(`${API_BASE}/profile`, { withCredentials: true });
         const profileName = resolveProfileName(profileRes.data) || formData.username;

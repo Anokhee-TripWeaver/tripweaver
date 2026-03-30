@@ -2,6 +2,25 @@ import React, { useState, useRef, useEffect } from 'react';
 import './Chatbot.css';
 
 const Chatbot = ({ user }) => {
+  const greetings = ["hi", "hello", "hey", "hii", "hiii"];
+
+  const isTravelIntent = (raw) => {
+    const t = raw.toLowerCase();
+    const words = t.trim().split(/\s+/).filter(Boolean);
+    const travelWords = [
+      "travel","trip","tour","vacation","holiday","visit","places","itenary","hotel","flight","airport",
+      "stay","resort","sightseeing","things to do","explore","biryani","temple","museum","trek","beach","lake","mountain",
+      "restaurant","food","eat","dine","cafe","budget","planner","packing","season"
+    ];
+    // allow simple greetings
+    if (words.length === 1 && greetings.includes(words[0])) return true;
+    // allow single-word potential places
+    if (words.length === 1 && words[0].length >= 3) return true;
+    return travelWords.some((w) => t.includes(w));
+  };
+
+  // Removed static local answers; all queries now go to backend after travel intent check.
+
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState([
     { 
@@ -84,25 +103,45 @@ const Chatbot = ({ user }) => {
   const sendMessage = async () => {
     if (!input.trim()) return;
 
-    const userMessage = { sender: 'user', text: input };
+    const cleanedInput = input
+      .replace(/restraunts|restraunt|resturant|reatraunst|restarunts|restarunt/gi, "restaurants")
+    const words = cleanedInput.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    const greetingOnly = words.length === 1 && greetings.includes(words[0]);
+
+    const userMessage = { sender: 'user', text: cleanedInput };
     setMessages(prev => [...prev, userMessage]);
     setInput('');
     setIsTyping(true);
 
+    // If it's not a travel query, reply politely and stop.
+    if (!isTravelIntent(input)) {
+      setMessages(prev => [...prev, { sender: 'bot', text: "I’m focused on travel planning—ask me about destinations, stays, transport, itineraries, or budgets." }]);
+      setIsTyping(false);
+      return;
+    }
+
     try {
+      const prompt = greetingOnly
+        ? `${cleanedInput}\nThe user just greeted you. Reply with one short friendly line and ask for their destination and dates. Do not propose any destination or itinerary yet.`
+        : `${cleanedInput}\n\nPlease answer directly with specific travel recommendations (places, hotels/restaurants, itinerary, best time, budget tips) and avoid asking follow-up questions.`;
+
       const response = await fetch('http://localhost:8090/api/chat/message', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ message: input }),
+        body: JSON.stringify({ 
+          message: prompt
+        }),
         credentials: 'include'
       });
 
       const data = await response.json();
+      const serverReply = (data?.reply || "").toString().trim();
+      const genericFallback = "I'm here to help with travel! Share dates, budget, and interests so I can tailor ideas.";
       
-      if (response.ok) {
-        setMessages(prev => [...prev, { sender: 'bot', text: data.reply }]);
+      if (response.ok && serverReply) {
+        setMessages(prev => [...prev, { sender: 'bot', text: serverReply }]);
       } else {
         setMessages(prev => [...prev, { 
           sender: 'bot', 

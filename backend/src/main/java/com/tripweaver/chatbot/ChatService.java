@@ -22,6 +22,10 @@ public class ChatService {
             return "Please ask me about travel destinations, planning, or tips! 🌍";
         }
 
+
+        if (groqApiKey == null || groqApiKey.trim().isEmpty()) {
+            throw new RuntimeException("Groq API key missing. Set GROQ_API_KEY in the environment or application.properties");
+        }
         try {
             // Call Groq API
             return callGroqAPI(userMessage);
@@ -179,3 +183,6 @@ public class ChatService {
         return result;
     }
 }
+
+
+

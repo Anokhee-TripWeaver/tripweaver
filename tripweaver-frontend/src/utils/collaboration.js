@@ -1,3 +1,6 @@
+import axios from "axios";
+import API_BASE from "../config";
+
 const REQUESTS_KEY = "trip_join_requests";
 const NOTIFICATIONS_KEY = "trip_profile_notifications";
 const COLLAB_POSTS_KEY = "trip_collaboration_posts";
@@ -16,6 +19,118 @@ const readJson = (key, fallback) => {
 
 const writeJson = (key, value) => {
   localStorage.setItem(key, JSON.stringify(value));
+};
+
+const normalizeText = (value) => (value || "").toString().trim().toLowerCase();
+
+const normalizeDateKey = (value) => {
+  const raw = (value || "").toString().trim();
+  if (!raw) return "";
+  const d = new Date(raw);
+  if (Number.isNaN(d.getTime())) return raw.toLowerCase();
+  return d.toISOString().slice(0, 10);
+};
+
+export const getTripChatThreadId = (item) => {
+  if (!item) return "";
+  const postId = (item.postId || item.tripId || item.id || "").toString().trim();
+  const host = normalizeEmail(item.hostEmail || item.email || item.toEmail || item.hostName);
+  if (postId && host) return `trip::${host}::${postId}`;
+  if (postId) return `trip::${postId}`;
+  const destination = normalizeText(item.destination);
+  const startDate = normalizeDateKey(item.startDate);
+  const endDate = normalizeDateKey(item.endDate);
+
+  if (!host && !destination && !startDate && !endDate) return "";
+  return `trip::${host}::${destination}::${startDate}::${endDate}`;
+};
+
+export const getTripChatTripId = (item) => {
+  const raw = (item?.postId || item?.tripId || item?.id || "").toString().trim();
+  if (!raw) return "";
+  return raw;
+};
+
+const getTripChatOwnerId = (threadId) => {
+  const normalized = (threadId || "").toString().trim().toLowerCase();
+  if (!normalized) return "";
+  const parts = normalized.split("::");
+  if (parts.length >= 3 && parts[0] === "trip" && parts[1].includes("@")) {
+    return parts[1];
+  }
+  return "";
+};
+
+const getTripChatPostKey = (threadId) => `trip-chat-${(threadId || "").toString().trim().toLowerCase()}`;
+
+export const getTripChatMessages = async (threadId) => {
+  if (!threadId) return [];
+  const ownerId = getTripChatOwnerId(threadId);
+  const postKey = getTripChatPostKey(threadId);
+  if (!ownerId || !postKey) return [];
+  try {
+    const res = await axios.get(`${API_BASE}/open-trip-splits`, {
+      params: { ownerId },
+      withCredentials: true,
+    });
+    const entries = Array.isArray(res?.data?.entries) ? res.data.entries : [];
+    const entry = entries.find((item) => item?.postKey === postKey);
+    const messages = Array.isArray(entry?.data?.messages) ? entry.data.messages : [];
+    return [...messages].sort((a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0));
+  } catch (err) {
+    console.warn(
+      "Trip chat fetch failed",
+      threadId,
+      err?.response?.status || "",
+      err?.response?.data?.message || err?.message || err
+    );
+    return [];
+  }
+};
+
+export const addTripChatMessage = async (threadId, message) => {
+  if (!threadId) return null;
+  const text = (message?.text || "").toString().trim();
+  if (!text) return null;
+  const ownerId = getTripChatOwnerId(threadId);
+  const postKey = getTripChatPostKey(threadId);
+  if (!ownerId || !postKey) return null;
+
+  try {
+    const current = await getTripChatMessages(threadId);
+    const saved = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      senderName: message?.senderName || "Trip Member",
+      senderEmail: message?.senderEmail || "",
+      text,
+      createdAt: new Date().toISOString(),
+    };
+    await axios.post(
+      `${API_BASE}/open-trip-splits`,
+      {
+        ownerId,
+        postKey,
+        data: {
+          messages: [...current, saved],
+        },
+        form: {},
+        memberForm: {},
+      },
+      { withCredentials: true }
+    );
+    if (saved && typeof window !== "undefined") {
+      window.dispatchEvent(new Event("trip-collaboration-chat-updated"));
+    }
+    return saved;
+  } catch (err) {
+    console.warn(
+      "Trip chat send failed",
+      threadId,
+      err?.response?.status || "",
+      err?.response?.data?.message || err?.message || err
+    );
+    return null;
+  }
 };
 
 export const getJoinRequestsForHost = (hostEmail) => {

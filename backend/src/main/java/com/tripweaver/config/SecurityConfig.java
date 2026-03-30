@@ -12,12 +12,14 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import java.util.Arrays;
 import java.util.List;
+import jakarta.servlet.http.HttpServletResponse;
 
 @Configuration
 @EnableWebSecurity
@@ -43,6 +45,8 @@ public class SecurityConfig {
         http
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .csrf(AbstractHttpConfigurer::disable)
+            // Avoid redirecting API calls (like open-trip-splits) to Google OAuth; return 401 instead.
+            .exceptionHandling(ex -> ex.authenticationEntryPoint(apiEntryPoint()))
             .authorizeHttpRequests(auth -> auth
                 // Public endpoints
             		.requestMatchers(
@@ -54,7 +58,9 @@ public class SecurityConfig {
             			    "/api/gemini/**",
             			    "/api/chat/**",
             			    "/api/photo-legacy",
+            			    "/api/search-history/**",
             			    "/api/collaboration-trips/**",   // add this
+            			    "/api/open-trip-splits/**",      // split persistence for open trips
             			    "/oauth2/**",
             			    "/login/**",
             			    "/api/bookings/**",
@@ -85,13 +91,24 @@ public class SecurityConfig {
     }
 
     @Bean
+    public AuthenticationEntryPoint apiEntryPoint() {
+        return (request, response, authException) -> {
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            response.setContentType("application/json");
+            response.getWriter().write("{\"message\":\"Unauthorized\"}");
+        };
+    }
+
+    @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
         
         // Allow frontend on port 3000
         config.setAllowedOrigins(Arrays.asList(
             "http://localhost:3000",
-            "http://127.0.0.1:3000"
+            "http://127.0.0.1:3000",
+            "http://localhost:5173",
+            "http://127.0.0.1:5173"
         ));
         
         // Allow all methods

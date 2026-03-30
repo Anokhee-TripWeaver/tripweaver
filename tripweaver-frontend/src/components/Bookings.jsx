@@ -3,34 +3,199 @@ import axios from "axios";
 import Navbar from "./navbar";
 import { useNavigate } from "react-router-dom";
 import "./Trips.css"; // Reuse styling for consistency
-
-const API_BASE = "http://localhost:8090/api";
+import API_BASE from "../config";
+import { persistIdentity, resolveProfileEmail, resolveProfileName } from "../utils/userIdentity";
 
 export default function Bookings() {
     const [bookings, setBookings] = useState([]);
     const [loading, setLoading] = useState(true);
     const navigate = useNavigate();
 
-    const username = sessionStorage.getItem("username");
-    const email = sessionStorage.getItem("email");
+    const looksLikeCollabPost = (item) => {
+        // Published open-trip posts can leak into bookings; filter them out here.
+        const seats = Number(item?.seatsAvailable);
+        const isOpenTrip = item?.openTrip === true || seats > 0 || Boolean(item?.note);
+        const hasBookingDate = Boolean(item?.bookingDate);
+        const status = (item?.status || "").toString().trim().toUpperCase();
+        const bookingStatuses = ["PENDING", "CONFIRMED", "COMPLETED", "CANCELLED"];
+        const hasBookingSignal = hasBookingDate || bookingStatuses.includes(status);
+        return isOpenTrip && !hasBookingSignal;
+    };
+
+    const isValidEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test((value || "").trim());
+    const normalizeEmail = (value) => (value || "").toString().trim().toLowerCase();
+    const normalizeIdentity = (value) => (value || "").toString().trim().toLowerCase();
+    const normalizeText = (value) => (value || "").toString().trim().toLowerCase();
+    const normalizeDateKey = (value) => {
+        const raw = (value || "").toString().trim();
+        if (!raw) return "";
+        const d = new Date(raw);
+        if (Number.isNaN(d.getTime())) return raw;
+        return d.toISOString().slice(0, 10);
+    };
+    const isAcceptedStatus = (value) => {
+        const s = (value || "").toString().trim().toUpperCase();
+        return ["ACCEPTED", "APPROVED", "CONFIRMED"].includes(s);
+    };
+    const isNonRejectedStatus = (value) => {
+        const s = (value || "").toString().trim().toUpperCase();
+        return s !== "REJECTED" && s !== "DECLINED";
+    };
 
     useEffect(() => {
-        if (!username) {
-            setLoading(false);
-            return;
-        }
-        // Use email if available, otherwise username
-        const identifier = email || username;
-        axios.get(`${API_BASE}/bookings/my-bookings?username=${identifier}`, { withCredentials: true })
-            .then(res => {
-                setBookings(res.data);
-                setLoading(false);
-            })
-            .catch(err => {
+        let cancelled = false;
+
+        const loadBookings = async () => {
+            setLoading(true);
+            try {
+                const candidateSet = new Set(
+                    [
+                        sessionStorage.getItem("email"),
+                        localStorage.getItem("email"),
+                        sessionStorage.getItem("username"),
+                        localStorage.getItem("username"),
+                    ]
+                        .map((v) => (v || "").toString().trim())
+                        .filter(Boolean)
+                );
+
+                try {
+                    const profileRes = await axios.get(`${API_BASE}/profile`, { withCredentials: true });
+                    const profileData = profileRes?.data || {};
+                    const profileEmail = resolveProfileEmail(profileData);
+                    const profileName = resolveProfileName(profileData);
+                    persistIdentity({ name: profileName, email: profileEmail });
+                    if (profileEmail) candidateSet.add(profileEmail);
+                    if (profileName) candidateSet.add(profileName);
+                } catch {}
+
+                const identifiers = [...candidateSet];
+                if (identifiers.length === 0) {
+                    if (!cancelled) setBookings([]);
+                    return;
+                }
+
+                const ownLists = await Promise.all(
+                    identifiers.map(async (identifier) => {
+                        try {
+                            const res = await axios.get(`${API_BASE}/bookings/my-bookings`, {
+                                params: { username: identifier },
+                                withCredentials: true,
+                            });
+                            return Array.isArray(res?.data) ? res.data : [];
+                        } catch {
+                            return [];
+                        }
+                    })
+                );
+
+                const ownBookings = ownLists.flat();
+                const filteredOwnBookings = ownBookings.filter((b) => !looksLikeCollabPost(b));
+
+                // Also include bookings from hosts of trips you've been accepted to join
+                let acceptedRequests = [];
+                try {
+                    const reqLists = await Promise.all(
+                        identifiers.map(async (identifier) => {
+                            try {
+                                const res = await axios.get(`${API_BASE}/collaboration-trips/join-requests/requester`, {
+                                    params: { email: identifier },
+                                    withCredentials: true,
+                                });
+                                return Array.isArray(res?.data) ? res.data : [];
+                            } catch {
+                                return [];
+                            }
+                        })
+                    );
+                    acceptedRequests = reqLists
+                        .flat()
+                        .filter((req) => isAcceptedStatus(req?.status) || isNonRejectedStatus(req?.status))
+                        .map((req) => ({
+                            hostEmail: normalizeEmail(req?.hostEmail || req?.email || req?.toEmail),
+                            hostIdentity: normalizeIdentity(req?.hostEmail || req?.email || req?.toEmail || req?.hostName),
+                            destination: normalizeText(req?.destination),
+                            startDate: normalizeDateKey(req?.startDate),
+                            endDate: normalizeDateKey(req?.endDate),
+                            hostName: req?.hostName || "Trip Host",
+                            updatedAt: req?.updatedAt || req?.createdAt,
+                            postId: req?.postId,
+                        }))
+                        .filter((r) => r.hostEmail && r.destination);
+                } catch {}
+
+                const hostEmails = [...new Set(acceptedRequests.map((r) => r.hostEmail))];
+                const hostBookingLists = await Promise.all(
+                    hostEmails.map(async (hostEmail) => {
+                        try {
+                            const res = await axios.get(`${API_BASE}/bookings/my-bookings`, {
+                                params: { username: hostEmail },
+                                withCredentials: true,
+                            });
+                            const list = Array.isArray(res?.data) ? res.data : [];
+                            return list.filter((b) => !looksLikeCollabPost(b));
+                        } catch {
+                            return [];
+                        }
+                    })
+                );
+
+                const sharedBookings = hostBookingLists
+                    .flat()
+                    .filter((b) =>
+                        acceptedRequests.some(
+                            (r) =>
+                                (normalizeEmail(b?.username) === r.hostEmail ||
+                                 normalizeIdentity(b?.username) === r.hostIdentity) &&
+                                normalizeText(b?.destination) === r.destination &&
+                                normalizeDateKey(b?.startDate) === r.startDate &&
+                                normalizeDateKey(b?.endDate) === r.endDate
+                        )
+                    )
+                    .map((b) => ({ ...b, _shared: true }));
+
+                // Fallback synthetic entry if host bookings aren't reachable
+                const syntheticBookings = acceptedRequests.map((r) => ({
+                    id: r.postId || `${r.hostEmail}-${r.destination}-${r.startDate}`,
+                    destination: r.destination,
+                    startDate: r.startDate,
+                    endDate: r.endDate,
+                    totalCost: "",
+                    bookingDate: r.updatedAt || new Date().toISOString(),
+                    username: r.hostEmail,
+                    _ownerEmail: r.hostEmail,
+                    hostName: r.hostName,
+                    _shared: true,
+                    _fromAcceptedRequest: true,
+                }));
+
+                const mergedByKey = new Map();
+                [...filteredOwnBookings, ...sharedBookings, ...syntheticBookings].forEach((b) => {
+                    const key =
+                        b?.id != null
+                            ? `id-${b.id}`
+                            : `${normalizeEmail(b?.username)}-${normalizeText(b?.destination)}-${normalizeDateKey(b?.startDate)}-${normalizeDateKey(b?.endDate)}-${(b?.bookingDate || "").toString().trim()}`;
+                    if (!mergedByKey.has(key)) mergedByKey.set(key, b);
+                });
+
+                const finalBookings = [...mergedByKey.values()].sort(
+                    (a, b) => new Date(b.bookingDate || 0) - new Date(a.bookingDate || 0)
+                );
+
+                if (!cancelled) setBookings(finalBookings);
+            } catch (err) {
                 console.error("Failed to fetch bookings", err);
-                setLoading(false);
-            });
-    }, [username, email]);
+                if (!cancelled) setBookings([]);
+            } finally {
+                if (!cancelled) setLoading(false);
+            }
+        };
+
+        loadBookings();
+        return () => {
+            cancelled = true;
+        };
+    }, []);
 
     const formatDateTime = (val) => {
         if (!val) return "";

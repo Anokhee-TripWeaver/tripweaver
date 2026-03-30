@@ -38,6 +38,8 @@ export const persistIdentity = ({ name, email }) => {
   if (isValidEmail(normalizedEmail)) {
     sessionStorage.setItem("email", normalizedEmail);
     localStorage.setItem("email", normalizedEmail);
+  } else {
+    sessionStorage.removeItem("email");
+    localStorage.removeItem("email");
   }
 };
-

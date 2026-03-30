@@ -1,11 +1,11 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import Navbar from "./navbar";
-
-const API_BASE = "http://localhost:8090/api";
+import API_BASE from "../config";
 
 export default function Wishlist() {
     const [savedTrips, setSavedTrips] = useState([]);
+    const [localWishlist, setLocalWishlist] = useState([]);
     const [loading, setLoading] = useState(true);
     const [selectedTrip, setSelectedTrip] = useState(null);
     const [showDetails, setShowDetails] = useState(false);
@@ -15,12 +15,36 @@ export default function Wishlist() {
     const [showGallery, setShowGallery] = useState(null);
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
-    const username = sessionStorage.getItem("username");
+    const username = sessionStorage.getItem("username") || localStorage.getItem("username");
     const cartKey = username ? `cart-${username}` : "cart";
+    const wishlistKey = username ? `wishlist-${username}` : "wishlist";
+    const legacyWishlistKey = "trip_wishlist";
 
     useEffect(() => {
         fetchSavedTrips();
+        loadLocalWishlist();
     }, []);
+
+    const loadLocalWishlist = () => {
+        const readList = (key) => {
+            try {
+                const raw = localStorage.getItem(key);
+                if (!raw) return [];
+                const parsed = JSON.parse(raw);
+                return Array.isArray(parsed) ? parsed : [];
+            } catch {
+                return [];
+            }
+        };
+        const scoped = readList(wishlistKey);
+        const legacy = readList(legacyWishlistKey);
+        const oldDefaultUserKey = readList("wishlist-TripWeaver User");
+        const list = scoped.length > 0 ? scoped : (legacy.length > 0 ? legacy : oldDefaultUserKey);
+        setLocalWishlist(list);
+        if (list.length > 0 && scoped.length === 0) {
+            localStorage.setItem(wishlistKey, JSON.stringify(list));
+        }
+    };
 
     const fetchSavedTrips = async () => {
         if (!username) {
@@ -42,7 +66,7 @@ export default function Wishlist() {
     };
 
     const handleDelete = async (id) => {
-        const username = sessionStorage.getItem("username");
+        const username = sessionStorage.getItem("username") || localStorage.getItem("username");
         if (!username) {
             alert("Please log in to manage your wishlist.");
             return;
@@ -57,6 +81,13 @@ export default function Wishlist() {
             console.error("Failed to delete trip", err);
             alert("Failed to delete from wishlist. Please try again.");
         }
+    };
+
+    const removeLocalWishlistItem = (id) => {
+        const next = (localWishlist || []).filter((x) => String(x.id) !== String(id));
+        setLocalWishlist(next);
+        localStorage.setItem(wishlistKey, JSON.stringify(next));
+        localStorage.setItem(legacyWishlistKey, JSON.stringify(next));
     };
 
     const openDetails = (trip) => {
@@ -174,15 +205,26 @@ export default function Wishlist() {
         }
     };
 
+    const parseMaybeJson = (value) => {
+        if (!value) return null;
+        if (typeof value === "object") return value;
+        if (typeof value !== "string") return null;
+        try {
+            return JSON.parse(value);
+        } catch {
+            return null;
+        }
+    };
+
     const handleAddToCart = (trip) => {
         if (!username) {
             alert("Please login to use the cart.");
             return;
         }
 
-        const flight = trip.flightDetails ? JSON.parse(trip.flightDetails) : null;
-        const returnFlight = trip.returnFlightDetails ? JSON.parse(trip.returnFlightDetails) : null;
-        const hotel = trip.hotelDetails ? JSON.parse(trip.hotelDetails) : null;
+        const flight = trip.flight || parseMaybeJson(trip.flightDetails);
+        const returnFlight = trip.returnFlight || parseMaybeJson(trip.returnFlightDetails);
+        const hotel = trip.hotel || parseMaybeJson(trip.hotelDetails);
 
         const cartItem = {
             id: Date.now(),
@@ -203,8 +245,26 @@ export default function Wishlist() {
         // if (alreadyInCart) { alert("This trip is already in your cart!"); return; }
 
         localStorage.setItem(cartKey, JSON.stringify([...existingCart, cartItem]));
+        localStorage.setItem("trip_cart", JSON.stringify([...existingCart, cartItem]));
         alert(`✅ Added ${trip.destination} trip to cart!`);
     };
+
+    const mergedWishlistTrips = useMemo(() => {
+        const toKey = (t) =>
+            `${(t?.destination || "").toString().trim().toLowerCase()}|${(t?.startDate || "").toString().trim()}|${(t?.endDate || "").toString().trim()}|${Number(t?.totalCost) || 0}`;
+        const map = new Map();
+        (savedTrips || []).forEach((t) => {
+            const normalized = { ...t, _source: "saved" };
+            map.set(toKey(normalized), normalized);
+        });
+        (localWishlist || []).forEach((t) => {
+            const key = toKey(t);
+            if (!map.has(key)) {
+                map.set(key, { ...t, _source: "local" });
+            }
+        });
+        return [...map.values()];
+    }, [savedTrips, localWishlist]);
 
     return (
         <div style={{
@@ -229,7 +289,7 @@ export default function Wishlist() {
 
                 {loading ? (
                     <p style={{ color: 'white' }}>Loading saved trips...</p>
-                ) : savedTrips.length === 0 ? (
+                ) : mergedWishlistTrips.length === 0 ? (
                     <div style={{
                         textAlign: 'center',
                         color: 'white',
@@ -242,10 +302,12 @@ export default function Wishlist() {
                         <p>Start planning and save your favorite itineraries!</p>
                     </div>
                 ) : (
+                    <>
+                    {mergedWishlistTrips.length > 0 ? (
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(450px, 1fr))', gap: '25px' }}>
-                        {savedTrips.map((trip) => {
-                            const flight = JSON.parse(trip.flightDetails || "{}");
-                            const hotel = JSON.parse(trip.hotelDetails || "{}");
+                        {mergedWishlistTrips.map((trip) => {
+                            const flight = trip.flight || parseMaybeJson(trip.flightDetails) || {};
+                            const hotel = trip.hotel || parseMaybeJson(trip.hotelDetails) || {};
                             const hotelImage = (hotel.photoUrls && hotel.photoUrls.length > 0) ? hotel.photoUrls[0] : (hotel.photoUrl || null);
 
                             return (
@@ -305,7 +367,7 @@ export default function Wishlist() {
                                             >
                                                 🛒
                                             </button>
-                                            <button onClick={() => handleDelete(trip.id)} style={{ padding: '10px 15px', background: '#ff4444', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }} title="Delete">
+                                            <button onClick={() => (trip._source === "saved" ? handleDelete(trip.id) : removeLocalWishlistItem(trip.id))} style={{ padding: '10px 15px', background: '#ff4444', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }} title="Delete">
                                                 🗑️
                                             </button>
                                         </div>
@@ -314,6 +376,8 @@ export default function Wishlist() {
                             );
                         })}
                     </div>
+                    ) : null}
+                    </>
                 )}
             </div>
             {showDetails && selectedTrip && (

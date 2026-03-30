@@ -1,12 +1,11 @@
-import React, { useState, useEffect } from "react";
+﻿import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import Navbar from "./navbar";
 import { useLocation } from "react-router-dom";
 import "./Trips.css";
 import { createJoinRequest } from "../utils/collaboration";
 import { persistIdentity, resolveProfileEmail, resolveProfileName } from "../utils/userIdentity";
-
-const API_BASE = "http://localhost:8090/api";
+import API_BASE from "../config";
 
 function Trips() {
     const [formData, setFormData] = useState({
@@ -14,7 +13,9 @@ function Trips() {
         destination: "",
         startDate: "",
         endDate: "",
-        budget: ""
+        budget: "",
+        travelers: 1,
+        rooms: 1
     });
     const [trip, setTrip] = useState(null);
     const [selectedFlight, setSelectedFlight] = useState(null);
@@ -42,7 +43,15 @@ function Trips() {
         endDate: ""
     });
     const [popupMessage, setPopupMessage] = useState("");
+    const [toast, setToast] = useState(null);
+    const toastTimer = useRef(null);
+    const showToast = (message, type = "info", duration = 2800) => {
+        if (toastTimer.current) clearTimeout(toastTimer.current);
+        setToast({ message, type });
+        toastTimer.current = setTimeout(() => setToast(null), duration);
+    };
     const isValidEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test((value || "").trim());
+    const normalizeIdentity = (value) => (value || "").toString().trim().toLowerCase();
 
     const username = sessionStorage.getItem("username") || localStorage.getItem("username");
     const [userEmail, setUserEmail] = useState(
@@ -140,6 +149,15 @@ function Trips() {
         setCompareList([]);
         setShowCompareModal(false);
     }, [step]);
+
+    useEffect(() => {
+        const originalAlert = window.alert;
+        window.alert = (msg) => showToast(String(msg || ""), "info");
+        return () => {
+            window.alert = originalAlert;
+            if (toastTimer.current) clearTimeout(toastTimer.current);
+        };
+    }, []);
 
     const handleFlightSelect = (flight) => {
         setSelectedFlight(flight);
@@ -419,18 +437,15 @@ function Trips() {
         return parseFloat(priceStr.replace(/[^0-9.]/g, ""));
     };
 
+    const travelerCount = Math.max(1, parseInt(formData.travelers) || 1);
+    const roomCount = Math.max(1, parseInt(formData.rooms) || 1);
+
+    const getOutboundCost = () => (selectedFlight ? parsePrice(selectedFlight.price) * travelerCount : 0);
+    const getReturnCost = () => (selectedReturnFlight ? parsePrice(selectedReturnFlight.price) * travelerCount : 0);
+    const getHotelCost = () => (selectedHotel ? selectedHotel.price * calculateNights() * roomCount : 0);
+
     const getTotalCost = () => {
-        let total = 0;
-        if (selectedFlight) {
-            total += parsePrice(selectedFlight.price);
-        }
-        if (selectedReturnFlight) {
-            total += parsePrice(selectedReturnFlight.price);
-        }
-        if (selectedHotel) {
-            total += selectedHotel.price * calculateNights();
-        }
-        return total;
+        return getOutboundCost() + getReturnCost() + getHotelCost();
     };
 
     const getRemainingBudget = () => {
@@ -459,10 +474,10 @@ function Trips() {
     const getOptionTotalCost = (item, type) => {
         if (!item) return 0;
         if (type === "flight") {
-            return parsePrice(item.price);
+            return parsePrice(item.price) * travelerCount;
         }
         if (type === "hotel") {
-            return (item.price || 0) * calculateNights();
+            return (item.price || 0) * calculateNights() * roomCount;
         }
         return 0;
     };
@@ -474,14 +489,14 @@ function Trips() {
         let base = 0;
         if (type === "flight") {
             if (step >= 2 && selectedFlight) {
-                base += parsePrice(selectedFlight.price);
+                base += parsePrice(selectedFlight.price) * travelerCount;
             }
             if (step >= 3 && selectedHotel) {
-                base += selectedHotel.price * calculateNights();
+                base += selectedHotel.price * calculateNights() * roomCount;
             }
         } else if (type === "hotel") {
             if (selectedFlight) {
-                base += parsePrice(selectedFlight.price);
+                base += parsePrice(selectedFlight.price) * travelerCount;
             }
         }
         return base;
@@ -499,7 +514,7 @@ function Trips() {
         const budget = parseFloat(formData.budget) || 0;
 
         if (total > budget) {
-            alert(`⚠️ Warning: Your total trip cost (₹${total}) exceeds your budget (₹${budget})!`);
+            alert(`âš ï¸ Warning: Your total trip cost (Rs.${total}) exceeds your budget (Rs.${budget})!`);
         }
 
         const cartItem = {
@@ -511,13 +526,15 @@ function Trips() {
             flight: selectedFlight,
             returnFlight: selectedReturnFlight,
             hotel: selectedHotel,
-            nights: calculateNights()
+            nights: calculateNights(),
+            travelers: travelerCount,
+            rooms: roomCount
         };
 
         const existingCart = JSON.parse(localStorage.getItem(cartKey) || "[]");
         localStorage.setItem(cartKey, JSON.stringify([...existingCart, cartItem]));
 
-        alert(`✅ Added to cart! Total: ₹${total}`);
+        alert(`? Added to cart! Total: Rs.${total}`);
     };
 
     const handleSaveTrip = async () => {
@@ -577,13 +594,13 @@ function Trips() {
         try {
             const res = await axios.get(`${API_BASE}/collaboration-trips`, { withCredentials: true });
             const posts = (Array.isArray(res.data) ? res.data : []).filter(
-                (post) => isValidEmail(post.hostEmail || post.email) && (Number(post.seatsAvailable) || 0) > 0
+                (post) => Boolean((post.hostEmail || post.email || "").toString().trim()) && (Number(post.seatsAvailable) || 0) > 0
             );
             setCollaborationPosts(sortPostsByCreatedAt(posts));
         } catch (err) {
             const localPosts = getLocalCollaborationPosts();
             const filteredLocal = localPosts.filter(
-                (post) => isValidEmail(post.hostEmail || post.email) && (Number(post.seatsAvailable) || 0) > 0
+                (post) => Boolean((post.hostEmail || post.email || "").toString().trim()) && (Number(post.seatsAvailable) || 0) > 0
             );
             if (filteredLocal.length !== localPosts.length) {
                 saveLocalCollaborationPosts(filteredLocal);
@@ -661,29 +678,25 @@ function Trips() {
     const primaryFlightBtnStyle = { padding: '8px 20px', backgroundColor: '#2196F3', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' };
 
     const handleRequestToJoin = async (post) => {
-        const hostEmail = post.hostEmail || post.email || "";
-        const requesterEmail = userEmail || "";
-        const isValidEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test((value || "").trim());
+        const hostIdentity = (post.hostEmail || post.email || post.hostName || "").toString().trim();
+        const requesterIdentity = (userEmail || username || "").toString().trim();
 
-        if (!hostEmail) {
-            alert("Host email is missing for this trip.");
+        if (!hostIdentity) {
+            alert("Host identity is missing for this trip.");
             return;
         }
-        if (!isValidEmail(hostEmail)) {
-            alert("Host email is invalid. Ask host to publish with a valid email.");
+        if (!requesterIdentity) {
+            alert("Your account identity is missing. Please sign in and try again.");
             return;
         }
-        if (!isValidEmail(requesterEmail)) {
-            alert("Your account email is invalid. Please update your email and try again.");
-            return;
-        }
-        if ((hostEmail || "").toLowerCase() === requesterEmail.toLowerCase()) {
+        if (normalizeIdentity(hostIdentity) === normalizeIdentity(requesterIdentity)) {
             alert("You cannot request to join your own trip.");
             return;
         }
 
+        let duplicatePendingServer = false;
         try {
-            await axios.post(
+            const res = await axios.post(
                 `${API_BASE}/collaboration-trips/join-requests`,
                 {
                     postId: Number(post.id) || null,
@@ -691,55 +704,59 @@ function Trips() {
                     startDate: post.startDate,
                     endDate: post.endDate,
                     hostName: post.hostName || "Trip Host",
-                    hostEmail,
+                    hostEmail: hostIdentity,
                     requesterName: username || "TripWeaver User",
-                    requesterEmail,
+                    requesterEmail: requesterIdentity,
                     status: "PENDING",
                 },
                 { withCredentials: true }
             );
+            duplicatePendingServer =
+                res?.data?.created === false ||
+                (res?.data?.reason || "").toString().toUpperCase() === "DUPLICATE_PENDING";
+        } catch (err) {
+            const msg = (err?.response?.data?.message || err?.message || "").toString().toLowerCase();
+            duplicatePendingServer = msg.includes("duplicate") || msg.includes("pending");
+        }
 
-            const requestResult = createJoinRequest({
-                post: { ...post, hostEmail },
-                requesterName: username || "TripWeaver User",
-                requesterEmail
-            });
-            if (!requestResult.created && requestResult.reason === "DUPLICATE_PENDING") {
-                alert("You already sent a pending request for this trip.");
-                return;
-            }
-        } catch {
-            const requestResult = createJoinRequest({
-                post: { ...post, hostEmail },
-                requesterName: username || "TripWeaver User",
-                requesterEmail
-            });
-            if (!requestResult.created && requestResult.reason === "DUPLICATE_PENDING") {
-                alert("You already sent a pending request for this trip.");
-                return;
-            }
+        const requestResult = createJoinRequest({
+            post: { ...post, hostEmail: hostIdentity },
+            requesterName: username || "TripWeaver User",
+            requesterEmail: requesterIdentity,
+        });
+        const duplicatePendingLocal = !requestResult.created && requestResult.reason === "DUPLICATE_PENDING";
+        if (duplicatePendingServer || duplicatePendingLocal) {
+            showToast("You already sent a pending request for this trip.", "warning");
+            return;
         }
 
         try {
+            if (!isValidEmail(hostIdentity) || !isValidEmail(requesterIdentity)) {
+                showToast("Request saved; email skipped (missing emails).", "warning");
+                return;
+            }
             const payload = {
-                toEmail: hostEmail,
+                toEmail: hostIdentity,
                 hostName: post.hostName || "Trip Host",
                 requesterName: username || "TripWeaver User",
-                requesterEmail,
+                requesterEmail: requesterIdentity,
                 destination: post.destination,
                 startDate: post.startDate,
                 endDate: post.endDate
             };
 
             await axios.post(`${API_BASE}/collaboration-trips/send-join-request-email`, payload, { withCredentials: true });
-            alert("Join request email sent to host.");
+
+            showToast("Request sent to host.", "success");
+            setToast({ message: "Request sent", type: "success" });
         } catch (err) {
             console.error("Failed to send join request", err);
-            alert("Failed to send join request email. Please try again.");
+            showToast("Failed to send join request. Please try again.", "error");
         }
     };
 
     return (
+        <>
         <div className="trips-page">
             <Navbar />
 
@@ -759,15 +776,15 @@ function Trips() {
                     <h4 style={{ margin: '0 0 10px 0', borderBottom: '1px solid #eee', paddingBottom: '5px' }}>Budget Tracker</h4>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
                         <span>Budget:</span>
-                        <strong>₹{formData.budget}</strong>
+                        <strong>Rs.{formData.budget}</strong>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
                         <span>Selected:</span>
-                        <strong style={{ color: getTotalCost() > formData.budget ? 'red' : 'green' }}>₹{getTotalCost()}</strong>
+                        <strong style={{ color: getTotalCost() > formData.budget ? 'red' : 'green' }}>Rs.{getTotalCost()}</strong>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '10px', paddingTop: '5px', borderTop: '1px solid #eee' }}>
                         <span>Remaining:</span>
-                        <strong style={{ color: getRemainingBudget() < 0 ? 'red' : 'blue' }}>₹{getRemainingBudget()}</strong>
+                        <strong style={{ color: getRemainingBudget() < 0 ? 'red' : 'blue' }}>Rs.{getRemainingBudget()}</strong>
                     </div>
                 </div>
             )}
@@ -841,12 +858,12 @@ function Trips() {
                                                             {flight.airline} ({flight.flightNumber})
                                                         </div>
                                                         <div style={{ fontSize: '0.9rem', marginBottom: '4px' }}>
-                                                            {flight.departureAirport} ➝ {flight.arrivalAirport}
+                                                            {flight.departureAirport} âž {flight.arrivalAirport}
                                                         </div>
                                                         <div style={{ fontSize: '0.9rem', marginBottom: '4px' }}>
                                                             <strong>Price:</strong>{" "}
                                                             <span style={{ color: isCheapest ? 'green' : '#333' }}>
-                                                                ₹{price}
+                                                                Rs.{price}
                                                             </span>
                                                         </div>
                                                         <div style={{ fontSize: '0.9rem', marginBottom: '4px' }}>
@@ -925,14 +942,14 @@ function Trips() {
                                                         <div style={{ fontSize: '0.9rem', marginBottom: '4px' }}>
                                                             <strong>Price per night:</strong>{" "}
                                                             <span style={{ color: isCheapest ? 'green' : '#333' }}>
-                                                                ₹{pricePerNight}
+                                                                Rs.{pricePerNight}
                                                             </span>
                                                         </div>
                                                         <div style={{ fontSize: '0.9rem', marginBottom: '4px' }}>
-                                                            <strong>Total for stay:</strong> ₹{total}
+                                                            <strong>Total for stay:</strong> Rs.{total}
                                                         </div>
                                                         <div style={{ fontSize: '0.9rem', marginBottom: '4px' }}>
-                                                            <strong>Rating:</strong> {hotel.rating} ⭐
+                                                            <strong>Rating:</strong> {hotel.rating} â­
                                                         </div>
                                                         <div style={{ fontSize: '0.9rem', marginBottom: '8px' }}>
                                                             <strong>Amenities:</strong> {hotel.roomType || "Standard amenities"}
@@ -1021,7 +1038,17 @@ function Trips() {
                         </div>
                         <div className="field">
                             <label>Total Budget</label>
-                            <input name="budget" type="number" placeholder="₹" value={formData.budget} onChange={handleInputChange} />
+                            <input name="budget" type="number" placeholder="Rs." value={formData.budget} onChange={handleInputChange} />
+                        </div>
+                    </div>
+                    <div className="input-row">
+                        <div className="field">
+                            <label>Travelers</label>
+                            <input name="travelers" type="number" min="1" value={formData.travelers} onChange={handleInputChange} />
+                        </div>
+                        <div className="field">
+                            <label>Rooms</label>
+                            <input name="rooms" type="number" min="1" value={formData.rooms} onChange={handleInputChange} />
                         </div>
                     </div>
                     <button type="submit" className="search-btn" disabled={loading}>
@@ -1087,7 +1114,7 @@ function Trips() {
                             {/* Step 1: Flights */}
                             {step === 1 && (
                                 <section className="results-column" style={sectionStyle}>
-                                    <h3 className="section-title">✈️ Step 1: Select Flight</h3>
+                                    <h3 className="section-title">âœˆï¸ Step 1: Select Flight</h3>
                                     {trip.flights.filter(isFutureFlight).map((f, i) => (
                                         <div
                                             key={i}
@@ -1103,7 +1130,7 @@ function Trips() {
                                                     <strong>{getTimeText(f.departureTime)}</strong>
                                                     <span>{f.departureAirport}</span>
                                                 </div>
-                                                <div className="route-line">✈️</div>
+                                                <div className="route-line">âœˆï¸</div>
                                                 <div className="route-point">
                                                     <strong>{getTimeText(f.arrivalTime)}</strong>
                                                     <span>{f.arrivalAirport}</span>
@@ -1143,9 +1170,9 @@ function Trips() {
                                         onClick={() => setStep(1)}
                                         style={backBtnStyle}
                                     >
-                                        ← Back to Flights
+                                        â† Back to Flights
                                     </button>
-                                    <h3 className="section-title">🏨 Step 2: Select Hotel</h3>
+                                    <h3 className="section-title">ðŸ¨ Step 2: Select Hotel</h3>
                                     {trip.hotels.map((h, i) => (
                                         <div
                                             key={i}
@@ -1166,12 +1193,12 @@ function Trips() {
                                                         padding: '5px 10px', borderRadius: '4px', cursor: 'pointer'
                                                     }}
                                                 >
-                                                    📷 View Rooms
+                                                    ðŸ“· View Rooms
                                                 </button>
                                             </div>
                                             <h4>{h.name}</h4>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
-                                                <p className="addr" style={{ margin: 0 }}>📍 {h.address}</p>
+                                                <p className="addr" style={{ margin: 0 }}>ðŸ“ {h.address}</p>
                                                 <button
                                                     onClick={(e) => {
                                                         e.stopPropagation();
@@ -1192,13 +1219,13 @@ function Trips() {
                                                         gap: '4px'
                                                     }}
                                                 >
-                                                    📍 Location
+                                                    ðŸ“ Location
                                                 </button>
                                             </div>
                                             <div className="hotel-footer">
-                                                <span className="rating">⭐ {h.rating}</span>
+                                                <span className="rating">â­ {h.rating}</span>
                                                 <div className="pricing">
-                                                    <span className="price" style={{ fontSize: '1.4rem' }}>₹{h.price * calculateNights()}</span>
+                                                    <span className="price" style={{ fontSize: '1.4rem' }}>Rs.{h.price * calculateNights()}</span>
                                                     <span className="total">for {calculateNights()} nights</span>
                                                 </div>
                                             </div>
@@ -1231,16 +1258,16 @@ function Trips() {
                                         onClick={() => setStep(2)}
                                         style={backBtnStyle}
                                     >
-                                        ← Back to Hotels
+                                        â† Back to Hotels
                                     </button>
-                                    <h3 className="section-title">✈️ Step 3: Select Return Flight (Optional)</h3>
+                                    <h3 className="section-title">âœˆï¸ Step 3: Select Return Flight (Optional)</h3>
 
                                     <div style={{ marginBottom: '20px', textAlign: 'center' }}>
                                         <button
                                             onClick={handleSkipReturnFlight}
                                             style={{ padding: '10px 30px', background: '#757575', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '1.1rem' }}
                                         >
-                                            Skip Return Flight ➝
+                                            Skip Return Flight âž
                                         </button>
                                     </div>
 
@@ -1259,7 +1286,7 @@ function Trips() {
                                                     <strong>{getTimeText(f.departureTime)}</strong>
                                                     <span>{f.departureAirport}</span>
                                                 </div>
-                                                <div className="route-line">✈️</div>
+                                                <div className="route-line">âœˆï¸</div>
                                                 <div className="route-point">
                                                     <strong>{getTimeText(f.arrivalTime)}</strong>
                                                     <span>{f.arrivalAirport}</span>
@@ -1299,16 +1326,16 @@ function Trips() {
                                         onClick={() => setStep(3)}
                                         style={backBtnStyle}
                                     >
-                                        ← Back to Return Flight
+                                        â† Back to Return Flight
                                     </button>
-                                    <h3 className="section-title">🧾 Step 4: Trip Summary & Pricing</h3>
+                                    <h3 className="section-title">ðŸ§¾ Step 4: Trip Summary & Pricing</h3>
                                     <div className="trip-card" style={{ padding: '20px' }}>
                                         <h4 style={{ borderBottom: '1px solid #eee', paddingBottom: '10px' }}>Departure Flight</h4>
                                         <div style={{ margin: '10px 0' }}>
                                             <p><strong>Airline:</strong> {selectedFlight.airline} ({selectedFlight.flightNumber})</p>
-                                            <p><strong>Route:</strong> {selectedFlight.departureAirport} ➝ {selectedFlight.arrivalAirport}</p>
+                                            <p><strong>Route:</strong> {selectedFlight.departureAirport} âž {selectedFlight.arrivalAirport}</p>
                                             <p><strong>Time:</strong> {getTimeText(selectedFlight.departureTime)} - {getTimeText(selectedFlight.arrivalTime)}</p>
-                                            <p><strong>Price:</strong> {selectedFlight.price}</p>
+                                            <p><strong>Price:</strong> {selectedFlight.price} × {travelerCount} traveler(s) = Rs.{getOutboundCost()}</p>
                                         </div>
 
                                         {selectedReturnFlight && (
@@ -1316,9 +1343,9 @@ function Trips() {
                                                 <h4 style={{ borderBottom: '1px solid #eee', paddingBottom: '10px', marginTop: '20px' }}>Return Flight</h4>
                                                 <div style={{ margin: '10px 0' }}>
                                                     <p><strong>Airline:</strong> {selectedReturnFlight.airline} ({selectedReturnFlight.flightNumber})</p>
-                                                    <p><strong>Route:</strong> {selectedReturnFlight.departureAirport} ➝ {selectedReturnFlight.arrivalAirport}</p>
+                                                    <p><strong>Route:</strong> {selectedReturnFlight.departureAirport} âž {selectedReturnFlight.arrivalAirport}</p>
                                                     <p><strong>Time:</strong> {getTimeText(selectedReturnFlight.departureTime)} - {getTimeText(selectedReturnFlight.arrivalTime)}</p>
-                                                    <p><strong>Price:</strong> {selectedReturnFlight.price}</p>
+                                                    <p><strong>Price:</strong> {selectedReturnFlight.price} × {travelerCount} traveler(s) = Rs.{getReturnCost()}</p>
                                                 </div>
                                             </>
                                         )}
@@ -1333,24 +1360,24 @@ function Trips() {
                                             <p><strong>Hotel:</strong> {selectedHotel.name}</p>
                                             <p><strong>Address:</strong> {selectedHotel.address}</p>
                                             <p><strong>Duration:</strong> {calculateNights()} Nights</p>
-                                            <p><strong>Price:</strong> ₹{selectedHotel.price * calculateNights()}</p>
+                                            <p><strong>Price:</strong> Rs.{selectedHotel.price} × {roomCount} room(s) × {calculateNights()} night(s) = Rs.{getHotelCost()}</p>
                                         </div>
 
                                         <div style={{ marginTop: '20px', padding: '15px', background: '#f9f9f9', borderRadius: '8px', border: '1px solid #eee' }}>
                                             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '1.2rem', fontWeight: 'bold' }}>
                                                 <span>Total Trip Cost:</span>
-                                                <span>₹{getTotalCost()}</span>
+                                                <span>Rs.{getTotalCost()}</span>
                                             </div>
                                             <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '5px', color: '#666' }}>
                                                 <span>Budget:</span>
-                                                <span>₹{formData.budget}</span>
+                                                <span>Rs.{formData.budget}</span>
                                             </div>
                                             <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '5px', color: getRemainingBudget() < 0 ? 'red' : 'green' }}>
                                                 <span>Remaining:</span>
-                                                <span>₹{getRemainingBudget()}</span>
+                                                <span>Rs.{getRemainingBudget()}</span>
                                             </div>
                                             {getTotalCost() > (parseFloat(formData.budget) || 0) && (
-                                                <p style={{ color: 'red', marginTop: '10px', fontWeight: 'bold' }}>⚠️ Exceeds Budget by ₹{getTotalCost() - parseFloat(formData.budget)}</p>
+                                                <p style={{ color: 'red', marginTop: '10px', fontWeight: 'bold' }}>âš ï¸ Exceeds Budget by Rs.{getTotalCost() - parseFloat(formData.budget)}</p>
                                             )}
                                         </div>
 
@@ -1367,7 +1394,7 @@ function Trips() {
                                                 onClick={handleSaveTrip}
                                                 style={{ flex: 1, padding: '12px', backgroundColor: '#4CAF50', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '1rem' }}
                                             >
-                                                ❤️ Save Trip
+                                                â¤ï¸ Save Trip
                                             </button>
                                         </div>
 
@@ -1385,8 +1412,9 @@ function Trips() {
                                                     type="email"
                                                     placeholder="Your account email"
                                                     value={userEmail || collabForm.hostEmail}
-                                                    readOnly
-                                                    title="Requests are matched to your logged-in account email"
+                                                    readOnly={Boolean(userEmail)}
+                                                    onChange={(e) => setCollabForm({ ...collabForm, hostEmail: e.target.value })}
+                                                    title={userEmail ? "Requests use your logged-in email" : "Enter the email where you want join requests"}
                                                 />
                                                 <input
                                                     type="number"
@@ -1435,7 +1463,7 @@ function Trips() {
                             </button>
 
                             <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                <button onClick={prevImage} style={{ background: 'none', border: 'none', color: '#fff', fontSize: '3rem', cursor: 'pointer', padding: '0 20px' }}>‹</button>
+                                <button onClick={prevImage} style={{ background: 'none', border: 'none', color: '#fff', fontSize: '3rem', cursor: 'pointer', padding: '0 20px' }}>â€¹</button>
                                 <img
                                     src={
                                         showGallery.photoUrls && showGallery.photoUrls.length > 0
@@ -1446,7 +1474,7 @@ function Trips() {
                                     alt="Room view"
                                     style={{ maxHeight: '100%', maxWidth: '100%', objectFit: 'contain' }}
                                 />
-                                <button onClick={nextImage} style={{ background: 'none', border: 'none', color: '#fff', fontSize: '3rem', cursor: 'pointer', padding: '0 20px' }}>›</button>
+                                <button onClick={nextImage} style={{ background: 'none', border: 'none', color: '#fff', fontSize: '3rem', cursor: 'pointer', padding: '0 20px' }}>â€º</button>
                             </div>
 
                             <div style={{ position: 'absolute', bottom: '-40px', width: '100%', textAlign: 'center', color: '#fff' }}>
@@ -1457,7 +1485,40 @@ function Trips() {
                 )}
             </div>
         </div>
+        {toast ? (
+          <div
+            style={{
+              position: "fixed",
+              right: "16px",
+              bottom: "16px",
+              minWidth: "260px",
+              maxWidth: "360px",
+              padding: "12px 14px",
+              borderRadius: "10px",
+              color: "#fff",
+              background:
+                toast.type === "success"
+                  ? "linear-gradient(135deg,#16a34a,#15803d)"
+                  : toast.type === "error"
+                  ? "linear-gradient(135deg,#dc2626,#b91c1c)"
+                  : toast.type === "warning"
+                  ? "linear-gradient(135deg,#d97706,#b45309)"
+                  : "linear-gradient(135deg,#2563eb,#1d4ed8)",
+              boxShadow: "0 12px 30px rgba(15,23,42,0.18)",
+              zIndex: 9999,
+              fontWeight: 600,
+            }}
+          >
+            {toast.message}
+          </div>
+        ) : null}
+        </>
     );
 }
 
 export default Trips;
+
+
+
+
+

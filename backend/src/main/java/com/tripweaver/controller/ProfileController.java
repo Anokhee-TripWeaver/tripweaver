@@ -31,6 +31,10 @@ public class ProfileController {
         this.userService = userService;
     }
 
+    private boolean hasText(String value) {
+        return value != null && !value.isBlank();
+    }
+
     // ✅ PROFILE + HISTORY
     @GetMapping
     public Map<String, Object> getProfile(Authentication authentication) {
@@ -68,16 +72,21 @@ public class ProfileController {
             }
         }
 
-        if (email != null) {
-            res.put("loggedIn", true);
-            res.put("name", name);
-            res.put("email", email);
-            res.put("picture", picture);
+        // Authentication already validated above; keep user logged in even if email is missing.
+        res.put("loggedIn", true);
+        res.put("name", name);
+        res.put("email", hasText(email) ? email : "");
+        res.put("picture", picture);
 
-            List<SearchHistory> history = historyService.getUserHistory(email);
+        String historyKey = hasText(email) ? email : name;
+        if (hasText(historyKey)) {
+            List<SearchHistory> history = historyService.getUserHistory(historyKey);
+            if ((history == null || history.isEmpty()) && hasText(name)) {
+                history = userService.getSearchHistory(name);
+            }
             res.put("history", history);
         } else {
-             res.put("loggedIn", false);
+            res.put("history", Collections.emptyList());
         }
 
         return res;

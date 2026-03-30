@@ -1,9 +1,8 @@
-import React, { useEffect, useState } from "react";
+﻿import React, { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Navbar from "./navbar";
 import axios from "axios";
-
-const API_BASE = "http://localhost:8090/api";
+import API_BASE from "../config";
 
 export default function Cart() {
     const navigate = useNavigate();
@@ -15,40 +14,68 @@ export default function Cart() {
     const [selectedHotel, setSelectedHotel] = useState(null);
     const [showGallery, setShowGallery] = useState(null);
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
+    const [toast, setToast] = useState(null);
+    const toastTimer = useRef(null);
 
-    const username = sessionStorage.getItem("username");
-    const email = sessionStorage.getItem("email");
+    const showToast = (message, type = "info", duration = 2600) => {
+        if (toastTimer.current) clearTimeout(toastTimer.current);
+        setToast({ message, type });
+        toastTimer.current = setTimeout(() => setToast(null), duration);
+    };
+
+    const username = sessionStorage.getItem("username") || localStorage.getItem("username");
+    const email = sessionStorage.getItem("email") || localStorage.getItem("email");
     const cartKey = username ? `cart-${username}` : "cart";
+    const legacyCartKey = "trip_cart";
 
     useEffect(() => {
-        const items = JSON.parse(localStorage.getItem(cartKey) || "[]");
+        const readList = (key) => {
+            try {
+                const raw = localStorage.getItem(key);
+                if (!raw) return [];
+                const parsed = JSON.parse(raw);
+                return Array.isArray(parsed) ? parsed : [];
+            } catch {
+                return [];
+            }
+        };
+
+        const scoped = readList(cartKey);
+        const legacy = readList(legacyCartKey);
+        const oldDefaultUserKey = readList("cart-TripWeaver User");
+        const items = scoped.length > 0 ? scoped : (legacy.length > 0 ? legacy : oldDefaultUserKey);
         setCartItems(items);
+        if (items.length > 0 && scoped.length === 0) {
+            localStorage.setItem(cartKey, JSON.stringify(items));
+        }
     }, [cartKey]);
 
     const removeFromCart = (id) => {
         const updatedCart = cartItems.filter(item => item.id !== id);
         setCartItems(updatedCart);
         localStorage.setItem(cartKey, JSON.stringify(updatedCart));
+        localStorage.setItem(legacyCartKey, JSON.stringify(updatedCart));
     };
 
     const clearCart = () => {
         setCartItems([]);
         localStorage.removeItem(cartKey);
+        localStorage.removeItem(legacyCartKey);
     };
 
     const handleCheckout = async () => {
         if (!username) {
-            alert("Please login to complete your booking.");
+            showToast("Please login to complete your booking.", "warning");
             navigate("/signup");
             return;
         }
 
         if (cartItems.length === 0) {
-            alert("Your cart is empty!");
+            showToast("Your cart is empty!", "warning");
             return;
         }
 
-        const confirm = window.confirm(`Proceed to book ${cartItems.length} trips for ₹${cartItems.reduce((sum, item) => sum + item.totalCost, 0)}?`);
+        const confirm = window.confirm(`Proceed to book ${cartItems.length} trips for Rs.${cartItems.reduce((sum, item) => sum + item.totalCost, 0)}?`);
         if (!confirm) return;
 
         try {
@@ -69,13 +96,13 @@ export default function Cart() {
 
             await Promise.all(bookingPromises);
 
-            alert("✅ Booking successful! Your trips are confirmed.");
+            showToast("Booking successful! Your trips are confirmed.", "success");
             clearCart();
             navigate("/bookings");
 
         } catch (err) {
             console.error("Booking failed", err);
-            alert("❌ Booking failed. Please try again.");
+            showToast("Booking failed. Please try again.", "error");
         }
     };
 
@@ -175,7 +202,7 @@ export default function Cart() {
             <Navbar />
             <div style={{ maxWidth: '1200px', margin: '100px auto 0', padding: '20px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px', borderBottom: '2px solid rgba(255,255,255,0.3)', paddingBottom: '15px' }}>
-                    <h2 style={{ color: 'white', margin: 0, textShadow: '0 2px 4px rgba(0,0,0,0.5)' }}>🛒 My Cart</h2>
+                    <h2 style={{ color: 'white', margin: 0, textShadow: '0 2px 4px rgba(0,0,0,0.5)' }}>ðŸ›’ My Cart</h2>
                     {cartItems.length > 0 && (
                         <button onClick={clearCart} style={{ background: 'rgba(255,255,255,0.2)', color: 'white', border: '1px solid white', padding: '8px 16px', borderRadius: '4px', cursor: 'pointer', backdropFilter: 'blur(5px)' }}>
                             Clear Cart
@@ -224,31 +251,31 @@ export default function Cart() {
                                                         fontSize: '0.7rem'
                                                     }}
                                                 >
-                                                    📷 View
+                                                    ðŸ“· View
                                                 </button>
                                             </div>
                                         )}
                                         <div>
                                             <h3 style={{ margin: 0, color: '#1b2a4e', fontSize: '1.4rem' }}>Trip to {item.destination}</h3>
                                             <p style={{ color: '#666', margin: '6px 0', fontSize: '1rem' }}>
-                                                📅 {item.startDate} to {item.endDate} ({item.nights} Nights)
+                                                ðŸ“… {item.startDate} to {item.endDate} ({item.nights} Nights)
                                             </p>
                                         </div>
                                     </div>
                                     
                                     <div style={{ marginTop: '10px', padding: '15px', background: '#f5f5f9', borderRadius: '10px' }}>
-                                        <p style={{ margin: '5px 0' }}><strong>✈️ Flight:</strong> {item.flight?.airline} ({item.flight?.flightNumber})</p>
+                                        <p style={{ margin: '5px 0' }}><strong>âœˆï¸ Flight:</strong> {item.flight?.airline} ({item.flight?.flightNumber})</p>
                                         {item.returnFlight && (
-                                            <p style={{ margin: '5px 0' }}><strong>✈️ Return:</strong> {item.returnFlight?.airline} ({item.returnFlight?.flightNumber})</p>
+                                            <p style={{ margin: '5px 0' }}><strong>âœˆï¸ Return:</strong> {item.returnFlight?.airline} ({item.returnFlight?.flightNumber})</p>
                                         )}
-                                        <p style={{ margin: '5px 0' }}><strong>🏨 Hotel:</strong> {item.hotel?.name}</p>
+                                        <p style={{ margin: '5px 0' }}><strong>ðŸ¨ Hotel:</strong> {item.hotel?.name}</p>
                                     </div>
                                 </div>
 
                                 <div style={{ flex: 1, minWidth: '220px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', alignItems: 'flex-end' }}>
                                     <div style={{ textAlign: 'right' }}>
                                         <span style={{ display: 'block', fontSize: '0.9rem', color: '#9092b0' }}>Estimated Total</span>
-                                        <span style={{ fontSize: '1.7rem', fontWeight: 'bold', color: '#1b2a4e' }}>₹{item.totalCost}</span>
+                                        <span style={{ fontSize: '1.7rem', fontWeight: 'bold', color: '#1b2a4e' }}>Rs.{item.totalCost}</span>
                                     </div>
                                     
                                     <button
@@ -301,7 +328,7 @@ export default function Cart() {
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
                                 <span style={{ fontSize: '1.2rem', fontWeight: '600' }}>Grand Total</span>
                                 <span style={{ fontSize: '2.2rem', fontWeight: 'bold', color: '#1b2a4e' }}>
-                                    ₹{cartItems.reduce((sum, item) => sum + item.totalCost, 0)}
+                                    Rs.{cartItems.reduce((sum, item) => sum + item.totalCost, 0)}
                                 </span>
                             </div>
                             <p style={{ marginTop: 0, marginBottom: '20px', fontSize: '0.95rem', color: '#555' }}>
@@ -365,7 +392,7 @@ export default function Cart() {
                                     cursor: 'pointer'
                                 }}
                             >
-                                ✕
+                                âœ•
                             </button>
                         </div>
                         <p style={{ margin: '5px 0', color: '#555' }}>
@@ -434,12 +461,12 @@ export default function Cart() {
                                     )}
                                     {selectedHotel.rating && (
                                         <p style={{ margin: '4px 0' }}>
-                                            <strong>Rating:</strong> {selectedHotel.rating} ⭐
+                                            <strong>Rating:</strong> {selectedHotel.rating} â­
                                         </p>
                                     )}
                                     {selectedHotel.price && (
                                         <p style={{ margin: '4px 0' }}>
-                                            <strong>Price per night:</strong> ₹{selectedHotel.price}
+                                            <strong>Price per night:</strong> Rs.{selectedHotel.price}
                                         </p>
                                     )}
                                     {buildMapsUrl(selectedHotel) && (
@@ -463,7 +490,7 @@ export default function Cart() {
                                 <p style={{ margin: '4px 0' }}>No hotel information.</p>
                             )}
                             <p style={{ marginTop: '10px' }}>
-                                <strong>Total Cost:</strong> ₹{selectedItem.totalCost}
+                                <strong>Total Cost:</strong> Rs.{selectedItem.totalCost}
                             </p>
                         </div>
                     </div>
@@ -471,11 +498,39 @@ export default function Cart() {
             )}
             
             {/* Gallery Modal */}
-            {showGallery && (
-                <div style={{
-                    position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
-                    background: 'rgba(0,0,0,0.9)', zIndex: 1100, display: 'flex', justifyContent: 'center', alignItems: 'center'
-                }}>
+        {toast ? (
+            <div
+                style={{
+                    position: "fixed",
+                    right: "16px",
+                    bottom: "16px",
+                    minWidth: "240px",
+                    maxWidth: "360px",
+                    padding: "12px 14px",
+                    borderRadius: "10px",
+                    color: "#fff",
+                    background:
+                        toast.type === "success"
+                            ? "linear-gradient(135deg,#16a34a,#15803d)"
+                            : toast.type === "warning"
+                            ? "linear-gradient(135deg,#d97706,#b45309)"
+                            : toast.type === "error"
+                            ? "linear-gradient(135deg,#dc2626,#b91c1c)"
+                            : "linear-gradient(135deg,#2563eb,#1d4ed8)",
+                    boxShadow: "0 12px 30px rgba(15,23,42,0.18)",
+                    zIndex: 2000,
+                    fontWeight: 600,
+                }}
+            >
+                {toast.message}
+            </div>
+        ) : null}
+
+        {showGallery && (
+            <div style={{
+                position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
+                background: 'rgba(0,0,0,0.9)', zIndex: 1100, display: 'flex', justifyContent: 'center', alignItems: 'center'
+            }}>
                     <div style={{ position: 'relative', width: '90%', maxWidth: '1000px', height: '80%' }}>
                         <button 
                             onClick={closeGallery}
@@ -484,11 +539,11 @@ export default function Cart() {
                                 background: 'none', border: 'none', color: '#fff', fontSize: '2rem', cursor: 'pointer'
                             }}
                         >
-                            ×
+                            Ã—
                         </button>
                         
                         <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <button onClick={prevImage} style={{ background: 'none', border: 'none', color: '#fff', fontSize: '3rem', cursor: 'pointer', padding: '0 20px' }}>‹</button>
+                            <button onClick={prevImage} style={{ background: 'none', border: 'none', color: '#fff', fontSize: '3rem', cursor: 'pointer', padding: '0 20px' }}>â€¹</button>
                             <img 
                                 src={
                                     showGallery.photoUrls && showGallery.photoUrls.length > 0
@@ -499,7 +554,7 @@ export default function Cart() {
                                 alt="Room view" 
                                 style={{ maxHeight: '100%', maxWidth: '100%', objectFit: 'contain' }}
                             />
-                            <button onClick={nextImage} style={{ background: 'none', border: 'none', color: '#fff', fontSize: '3rem', cursor: 'pointer', padding: '0 20px' }}>›</button>
+                            <button onClick={nextImage} style={{ background: 'none', border: 'none', color: '#fff', fontSize: '3rem', cursor: 'pointer', padding: '0 20px' }}>â€º</button>
                         </div>
                         
                         <div style={{ position: 'absolute', bottom: '-40px', width: '100%', textAlign: 'center', color: '#fff' }}>
@@ -511,3 +566,4 @@ export default function Cart() {
         </div>
     );
 }
+
