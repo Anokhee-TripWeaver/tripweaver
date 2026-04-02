@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import './Chatbot.css';
 import API_BASE from "../config";
 
-const Chatbot = ({ user }) => {
+const Chatbot = ({ user, pageContext }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState([
     { 
@@ -132,37 +132,183 @@ const Chatbot = ({ user }) => {
 
     const userMessage = { sender: 'user', text: input };
     setMessages(prev => [...prev, userMessage]);
+    const currentInput = input;
     setInput('');
     setIsTyping(true);
 
     try {
-      const response = await fetch(`${API_BASE}/chat/message`, {
+      const response = await fetch(`${API_BASE}/chat/agent`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ message: input }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: currentInput,
+          context: {
+            page: window.location.pathname,
+            user: user ? { username: user.username || user.name, email: user.email } : null,
+            ...(pageContext || {})
+          }
+        }),
         credentials: 'include'
       });
 
       const data = await response.json();
-      
+      console.log('[Agent Response]', data); // debug
+
       if (response.ok) {
-        setMessages(prev => [...prev, { sender: 'bot', text: data.reply }]);
-      } else {
-        setMessages(prev => [...prev, { 
-          sender: 'bot', 
-          text: '**Error** ⚠️\n\nSorry, I encountered an issue. Please try again!' 
+        // Parse suggest actions out of reply text before displaying
+        const suggestRegex = /\[ACTION:suggest\|([^\]]+)\]/g;
+        const suggests = [];
+        let cleanReply = data.reply || '';
+        let match;
+        while ((match = suggestRegex.exec(data.reply || '')) !== null) {
+          const parts = match[1].split('|').reduce((acc, p) => {
+            const [k, ...v] = p.split(':');
+            acc[k.trim()] = v.join(':').trim();
+            return acc;
+          }, {});
+          suggests.push(parts);
+          cleanReply = cleanReply.replace(match[0], '').trim();
+        }
+
+        // Also handle suggests from structured actionData
+        const allSuggests = suggests.length > 0 ? suggests
+          : (data.action === 'suggest' && data.actionData?.suggests) ? data.actionData.suggests : [];
+
+        setMessages(prev => [...prev, {
+          sender: 'bot',
+          text: cleanReply || data.error,
+          suggests: allSuggests
         }]);
+
+        // Only execute non-navigate/suggest actions automatically
+        if (data.action && data.action !== 'navigate' && data.action !== 'suggest') {
+          await executeAction(data.action, data.actionData, currentInput, data.reply);
+        }
+      } else {
+        setMessages(prev => [...prev, { sender: 'bot', text: '⚠️ Sorry, I encountered an issue. Please try again!' }]);
       }
     } catch (error) {
-      setMessages(prev => [...prev, { 
-        sender: 'bot', 
-        text: '**Connection Error** 🔌\n\nUnable to connect to the server. Please check your connection.' 
-      }]);
+      setMessages(prev => [...prev, { sender: 'bot', text: '🔌 Unable to connect to the server. Please check your connection.' }]);
     } finally {
       setIsTyping(false);
     }
+  };
+
+  const executeAction = async (action, actionData, originalMessage, botReply) => {
+    try {
+      if (action === 'navigate' && actionData?.path) {
+        const state = (actionData.destination || actionData.startDate) ? {
+          restore: {
+            destination: actionData.destination || '',
+            origin: actionData.origin || '',
+            budget: actionData.budget || '',
+            searchDate: actionData.startDate || '',
+            endDate: actionData.endDate || '',
+            autoSearch: !!(actionData.destination && actionData.startDate && actionData.endDate)
+          }
+        } : undefined;
+        setTimeout(() => {
+          if (state) {
+            // Use sessionStorage so data survives the page navigation
+            sessionStorage.setItem('agent_navigate', JSON.stringify(state.restore));
+          }
+          window.location.href = actionData.path;
+        }, 1200);
+
+      } else if (action === 'send_email') {
+        // Extract email from message if not in actionData
+        let toEmail = actionData?.to;
+        if (!toEmail || toEmail === 'unknown') {
+          const emailMatch = originalMessage.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
+          toEmail = emailMatch ? emailMatch[0] : user?.email;
+        }
+        if (!toEmail) {
+          setMessages(prev => [...prev, { sender: 'bot', text: '📧 Please provide your email address so I can send it to you!' }]);
+          return;
+        }
+
+        // Convert bot's reply markdown to readable HTML
+        const replyHtml = (botReply || originalMessage)
+          .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+          .replace(/^#{1,3} (.+)$/gm, '<h3 style="color:#e85d26">$1</h3>')
+          .replace(/^[•\-] (.+)$/gm, '<li>$1</li>')
+          .replace(/(<li>.*<\/li>)/gs, '<ul>$1</ul>')
+          .replace(/\n\n/g, '</p><p>')
+          .replace(/\n/g, '<br>');
+
+        const emailRes = await fetch(`${API_BASE}/chat/agent/send-email`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            toEmail,
+            subject: actionData?.subject || 'TripWeaver - Your Travel Itinerary',
+            content: `<html><body style="font-family:Arial;padding:20px;max-width:600px;margin:auto">
+              <div style="background:linear-gradient(135deg,#e85d26,#f97316);padding:20px;border-radius:10px 10px 0 0;text-align:center">
+                <h2 style="color:white;margin:0">✈️ TripWeaver Travel Itinerary</h2>
+              </div>
+              <div style="background:#fff;padding:20px;border:1px solid #eee;border-radius:0 0 10px 10px">
+                <p style="color:#666">Here's the itinerary you requested:</p>
+                <div style="background:#f9f9f9;padding:15px;border-radius:8px;line-height:1.8">${replyHtml}</div>
+                <br><p style="color:#888">Safe travels! ✈️</p>
+                <p><strong>TripWeaver Team</strong></p>
+              </div>
+            </body></html>`
+          }),
+          credentials: 'include'
+        });
+        const emailData = await emailRes.json();
+        setMessages(prev => [...prev, {
+          sender: 'bot',
+          text: emailRes.ok ? `✅ Email sent to ${toEmail}!` : `❌ Failed to send email: ${emailData.error}`
+        }]);
+
+      } else if (action === 'join_trip') {
+        if (!user) {
+          setMessages(prev => [...prev, { sender: 'bot', text: '🔐 Please log in first to join a trip!' }]);
+          return;
+        }
+        const joinRes = await fetch(`${API_BASE}/chat/agent/join-trip`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            postId: actionData?.tripId,
+            destination: actionData?.destination,
+            startDate: actionData?.startDate,
+            endDate: actionData?.endDate,
+            hostEmail: actionData?.hostEmail,
+            hostName: actionData?.hostName,
+            requesterEmail: actionData?.requesterEmail || user?.email,
+            requesterName: actionData?.requesterName || user?.username || user?.name,
+            pricePerPerson: actionData?.pricePerPerson
+          }),
+          credentials: 'include'
+        });
+        const joinData = await joinRes.json();
+        setMessages(prev => [...prev, {
+          sender: 'bot',
+          text: joinRes.ok
+            ? `✅ Join request sent for the trip to ${actionData?.destination}! The host will be notified.`
+            : `❌ ${joinData.error || 'Failed to send join request'}`
+        }]);
+      }
+    } catch (err) {
+      setMessages(prev => [...prev, { sender: 'bot', text: '⚠️ Action failed: ' + err.message }]);
+    }
+  };
+
+  const handleSuggestClick = (suggest) => {
+    const path = suggest.path || '/';
+    if (suggest.destination || suggest.startDate) {
+      sessionStorage.setItem('agent_navigate', JSON.stringify({
+        destination: suggest.destination || '',
+        origin: suggest.origin || '',
+        budget: suggest.budget || '',
+        searchDate: suggest.startDate || '',
+        endDate: suggest.endDate || '',
+        autoSearch: !!(suggest.destination && suggest.startDate && suggest.endDate && suggest.budget)
+      }));
+    }
+    window.location.href = path;
   };
 
   const handleKeyPress = (e) => {
@@ -236,6 +382,22 @@ const Chatbot = ({ user }) => {
               </div>
               <div className="message-text">
                 {formatText(msg.text)}
+                {msg.suggests && msg.suggests.length > 0 && (
+                  <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {msg.suggests.map((s, si) => (
+                      <button key={si} onClick={() => handleSuggestClick(s)}
+                        style={{
+                          background: 'linear-gradient(135deg,#6366f1,#818cf8)',
+                          color: '#fff', border: 'none', borderRadius: 20,
+                          padding: '7px 14px', cursor: 'pointer', fontSize: '0.85rem',
+                          fontWeight: 600, textAlign: 'left', width: 'fit-content',
+                          boxShadow: '0 2px 8px rgba(99,102,241,0.3)'
+                        }}>
+                        {s.label || '→ Open'}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           ))}

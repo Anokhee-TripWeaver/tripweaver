@@ -15,23 +15,49 @@ public class GeminiService {
 
     private final RestTemplate restTemplate = new RestTemplate();
 
-    public String generateItinerary(String destination, String startDate, String endDate) {
+    public String generateItinerary(String destination, String startDate, String endDate,
+                                     String travelWith, String interests, String budget, String pace) {
         String cleanKey = apiKey.trim().replace("\"", "").replace("'", "");
 
-        // 1. Build a High-Detail Prompt
+        String travelContext = switch (travelWith) {
+            case "friends" -> "a group of friends";
+            case "family" -> "a family with children";
+            case "couple" -> "a couple on a romantic trip";
+            case "business" -> "a business traveller";
+            default -> "a solo traveller";
+        };
+
+        String paceNote = switch (pace) {
+            case "relaxed" -> "Keep the pace relaxed with plenty of free time and rest.";
+            case "packed" -> "Pack as many activities as possible each day.";
+            default -> "Keep a moderate pace balancing activities and rest.";
+        };
+
+        String budgetNote = switch (budget) {
+            case "budget" -> "Focus on budget-friendly options, street food, and free attractions.";
+            case "luxury" -> "Suggest luxury hotels, fine dining, and premium experiences.";
+            default -> "Mix of mid-range restaurants and moderately priced activities.";
+        };
+
+        String interestNote = (interests != null && !interests.isBlank())
+            ? "The traveller is especially interested in: " + interests + "."
+            : "";
+
         String prompt = String.format(
-            "You are a professional travel planner. Generate a highly detailed, luxury-grade travel itinerary for %s from %s to %s. " +
-            "For EACH day, follow this exact structure and include a dashed line separator (---) at the end of each day:\n\n" +
+            "You are a professional travel planner. Generate a highly detailed travel itinerary for %s from %s to %s. " +
+            "This trip is for %s. %s %s %s\n\n" +
+            "For EACH day, follow this exact structure:\n\n" +
             "DAY X (YYYY-MM-DD)\n" +
-            "Morning (08:00 AM - 12:00 PM): Provide 3-4 sentences on specific historical landmarks or hidden gems. Mention specific entry gates or local secrets.\n" +
-            "Lunch (01:00 PM): Mention a specific, highly-rated local restaurant and one signature dish to try.\n" +
-            "Afternoon (02:30 PM - 06:00 PM): Plan a high-activity or scenic spot with local transport tips.\n" +
-            "Dinner (07:30 PM): Suggest a fine dining or unique atmospheric restaurant with price indicators.\n" +
-            "Evening: Suggest a night-walk, a rooftop bar, or a cultural performance.\n" +
-            "Logistics: Estimated walking time and recommended mode of transport (e.g., 'Take the Metro Line 2 to save 30 mins').\n" +
-            "Estimated Daily Cost: ₹ [Total] INR (detailed breakdown of entry fees and food).\n" +
-            "---", 
-            destination, startDate, endDate
+            "Morning (08:00 AM - 12:00 PM): 3-4 sentences on specific landmarks or hidden gems.\n" +
+            "Lunch (01:00 PM): Specific local restaurant and signature dish.\n" +
+            "Afternoon (02:30 PM - 06:00 PM): Activity or scenic spot with transport tips.\n" +
+            "Dinner (07:30 PM): Restaurant suggestion with atmosphere description.\n" +
+            "Evening: Night-walk, rooftop bar, or cultural experience.\n" +
+            "Logistics: Estimated travel time and recommended transport.\n" +
+            "Estimated Daily Cost: ₹ [Total] INR (breakdown).\n" +
+            "---",
+            destination, startDate, endDate,
+            travelContext, paceNote, budgetNote, interestNote
         );
 
         // 2. Stable Endpoints

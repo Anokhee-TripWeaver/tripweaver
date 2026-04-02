@@ -9,8 +9,9 @@ const STORAGE_KEY = "trip_collaboration_posts";
 const SPLIT_KEY = "open_trips_splitwise_v1";
 const OPEN_TRIP_SPLIT_ENABLED = false; // disable split UI/flows for Open Trips; use booking split instead
 
-function OpenTrips() {
+function OpenTrips({ onTripsLoaded }) {
   const [posts, setPosts] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [syncMessage, setSyncMessage] = useState("");
   const [expandedById, setExpandedById] = useState({});
   
@@ -701,20 +702,33 @@ function OpenTrips() {
   }, []);
 
   const loadPosts = useCallback(async () => {
+    setIsLoading(true);
     // Show cached data immediately while API loads
     const cached = getLocalPosts();
     if (cached.length > 0) {
-      const filteredCached = cached.filter((post) => Boolean((post.hostEmail || post.email || "").toString().trim()) && (Number(post.seatsAvailable) || 0) > 0);
+      const filteredCached = cached.filter((post) => {
+        const hasHost = Boolean((post.hostEmail || post.email || "").toString().trim());
+        const hasSeats = (Number(post.seatsAvailable) || 0) > 0;
+        const notPast = post.endDate ? new Date(post.endDate) >= new Date(new Date().toDateString()) : true;
+        return hasHost && hasSeats && notPast;
+      });
       setPosts(sortPostsByCreatedAt(filteredCached));
+      setIsLoading(false);
     }
     try {
       const res = await axios.get(`${API_BASE}/collaboration-trips`, { withCredentials: true });
       const list = Array.isArray(res.data) ? res.data : [];
-      const filtered = list.filter((post) => Boolean((post.hostEmail || post.email || "").toString().trim()) && (Number(post.seatsAvailable) || 0) > 0);
+      const filtered = list.filter((post) => {
+        const hasHost = Boolean((post.hostEmail || post.email || "").toString().trim());
+        const hasSeats = (Number(post.seatsAvailable) || 0) > 0;
+        const notPast = post.endDate ? new Date(post.endDate) >= new Date(new Date().toDateString()) : true;
+        return hasHost && hasSeats && notPast;
+      });
       const enriched = await mergeMissingDetailsFromSavedTrips(filtered);
-      // Cache in localStorage so reload shows data instantly
       localStorage.setItem(STORAGE_KEY, JSON.stringify(enriched));
-      setPosts(sortPostsByCreatedAt(enriched));
+      const sorted = sortPostsByCreatedAt(enriched);
+      setPosts(sorted);
+      if (onTripsLoaded) onTripsLoaded(sorted);
       setSyncMessage("");
     } catch (error) {
       const localPosts = getLocalPosts();
@@ -725,6 +739,8 @@ function OpenTrips() {
       const enrichedLocal = await mergeMissingDetailsFromSavedTrips(filteredLocal);
       setPosts(sortPostsByCreatedAt(enrichedLocal));
       setSyncMessage("Showing local posts. Backend sync is not available.");
+    } finally {
+      setIsLoading(false);
     }
   }, [mergeMissingDetailsFromSavedTrips]);
 
@@ -844,7 +860,20 @@ function OpenTrips() {
           <p>Trips available to join for shared cost and company.</p>
           {syncMessage && <p className="open-trips-sync">{syncMessage}</p>}
 
-          {posts.length === 0 ? (
+          {isLoading ? (
+            <div className="open-trips-list">
+              {[1,2,3].map(i => (
+                <div key={i} className="open-trips-card" style={{ opacity: 0.5 }}>
+                  <div style={{ background: '#e0e0e0', height: 24, borderRadius: 6, marginBottom: 10, width: '60%', animation: 'pulse 1.5s infinite' }} />
+                  <div style={{ background: '#e0e0e0', height: 16, borderRadius: 6, marginBottom: 8, width: '40%' }} />
+                  <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                    {[1,2,3].map(j => <div key={j} style={{ background: '#e0e0e0', height: 28, borderRadius: 20, width: 90 }} />)}
+                  </div>
+                  <div style={{ background: '#e0e0e0', height: 40, borderRadius: 8, width: '100%' }} />
+                </div>
+              ))}
+            </div>
+          ) : posts.length === 0 ? (
             <div className="open-trips-empty">
               No open trips yet. Publish from the Trips summary page.
             </div>

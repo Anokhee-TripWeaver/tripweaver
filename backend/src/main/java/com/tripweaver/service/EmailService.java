@@ -235,6 +235,21 @@ public class EmailService {
         }
     }
 
+    public void sendAgentEmail(String toEmail, String subject, String htmlContent) {
+        try {
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+            helper.setFrom(fromEmail);
+            helper.setTo(toEmail);
+            helper.setSubject(subject);
+            helper.setText(htmlContent != null ? htmlContent : "", true);
+            mailSender.send(message);
+        } catch (Exception e) {
+            System.err.println("Failed to send agent email: " + e.getMessage());
+            throw new RuntimeException("Email send failed", e);
+        }
+    }
+
     public void sendBookingGroupEmail(String toEmail, String bookedByName, String destination, String startDate, String endDate, Double totalCost, Double perPersonCost, int travellersCount) {
         try {
             if (!hasValidSenderCredentials()) {

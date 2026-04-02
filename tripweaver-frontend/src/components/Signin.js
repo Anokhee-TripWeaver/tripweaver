@@ -44,7 +44,7 @@ export default function Signin() {
         sessionStorage.setItem("email", backendEmail);
       }
 
-      navigate("/profile");
+      navigate("/");
     } catch (err) {
       setError(err.response?.data?.message || "Invalid credentials");
     } finally {

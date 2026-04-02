@@ -332,9 +332,7 @@ const LandingPage = () => {
                 <span className="text-xl font-bold text-white">TripWeaver</span>
               </div>
               <div className="flex gap-8 text-sm mb-4 md:mb-0">
-                <a href="#" className="hover:text-orange-400 transition">Privacy Policy</a>
-                <a href="#" className="hover:text-orange-400 transition">Terms of Service</a>
-                <a href="#" className="hover:text-orange-400 transition">Contact</a>
+                <a href="/about" className="hover:text-orange-400 transition">About Us</a>
               </div>
             </div>
             <div className="text-center mt-6 text-sm text-gray-500">

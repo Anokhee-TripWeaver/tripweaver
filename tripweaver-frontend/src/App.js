@@ -16,6 +16,7 @@ import Cart from "./components/Cart";
 import PaymentPage from "./components/PaymentPage";
 import Bookings from "./components/Bookings";
 import Chatbot from "./components/Chatbot";
+import AboutUs from "./components/AboutUs";
 import ProtectedRoute from "./components/ProtectedRoute";
 
 import "./App.css";
@@ -23,9 +24,13 @@ import "boxicons/css/boxicons.min.css";
 
 function Layout() {
   const [isSignup, setIsSignup] = useState(false);
+  const [chatContext, setChatContext] = useState({});
   const location = useLocation();
 
-  // Hide navbar and chatbot on signup page
+  const user = React.useMemo(() => {
+    try { return JSON.parse(localStorage.getItem('user')); } catch { return null; }
+  }, []);
+
   const hideNavbar = location.pathname === "/signup";
   const hideChatbot = location.pathname === "/signup" || location.pathname === "/signin" || location.pathname === "/";
 
@@ -34,11 +39,9 @@ function Layout() {
       {!hideNavbar && <Navbar />}
 
       <Routes>
-        {/* HOME - NEW LANDING PAGE */}
         <Route path="/" element={<LandingPage />} />
         <Route path="/explore" element={<Explore />} />
 
-        {/* LOGIN / SIGNUP */}
         <Route
           path="/signup"
           element={
@@ -48,30 +51,17 @@ function Layout() {
                   {isSignup ? <Signup /> : <Signin />}
                   <p className="toggle-text">
                     {isSignup ? (
-                      <>
-                        Already have an account?{" "}
-                        <span onClick={() => setIsSignup(false)}>Login</span>
-                      </>
+                      <>Already have an account? <span onClick={() => setIsSignup(false)}>Login</span></>
                     ) : (
-                      <>
-                        Don’t have an account?{" "}
-                        <span onClick={() => setIsSignup(true)}>Register</span>
-                      </>
+                      <>Don't have an account? <span onClick={() => setIsSignup(true)}>Register</span></>
                     )}
                   </p>
                 </div>
-
                 <div className="info-box">
                   {isSignup ? (
-                    <>
-                      <h2>Hello, Explorer!</h2>
-                      <p>Start your journey by creating an account with us.</p>
-                    </>
+                    <><h2>Hello, Explorer!</h2><p>Start your journey by creating an account with us.</p></>
                   ) : (
-                    <>
-                      <h2>Welcome Back!</h2>
-                      <p>To keep connected with us, please login using your credentials.</p>
-                    </>
+                    <><h2>Welcome Back!</h2><p>To keep connected with us, please login using your credentials.</p></>
                   )}
                 </div>
               </div>
@@ -79,23 +69,20 @@ function Layout() {
           }
         />
 
-        {/* OTHER PAGES - PROTECTED */}
         <Route path="/search" element={<ProtectedRoute><DestinationSearch /></ProtectedRoute>} />
         <Route path="/planner" element={<ProtectedRoute><ItineraryPlanner /></ProtectedRoute>} />
         <Route path="/trips" element={<ProtectedRoute><Trips /></ProtectedRoute>} />
         <Route path="/profile" element={<ProtectedRoute><UserProfile /></ProtectedRoute>} />
-        <Route path="/open-trips" element={<ProtectedRoute><OpenTrips /></ProtectedRoute>} />
+        <Route path="/open-trips" element={<ProtectedRoute><OpenTrips onTripsLoaded={(trips) => setChatContext({ trips })} /></ProtectedRoute>} />
         <Route path="/wishlist" element={<ProtectedRoute><Wishlist /></ProtectedRoute>} />
         <Route path="/cart" element={<ProtectedRoute><Cart /></ProtectedRoute>} />
         <Route path="/payment" element={<ProtectedRoute><PaymentPage /></ProtectedRoute>} />
         <Route path="/bookings" element={<ProtectedRoute><Bookings /></ProtectedRoute>} />
-
-        {/* FALLBACK */}
+        <Route path="/about" element={<AboutUs />} />
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
 
-      {/* Chatbot floating on all pages except signup/login/landing */}
-      {!hideChatbot && <Chatbot />}
+      {!hideChatbot && <Chatbot user={user} pageContext={chatContext} />}
     </>
   );
 }

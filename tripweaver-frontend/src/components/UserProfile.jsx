@@ -205,7 +205,14 @@ export default function UserProfile() {
         axios.get(`${API_BASE}/collaboration-trips/${tripId}`)
       ]);
 
-      setSettlements(prev => ({ ...prev, [tripId]: settlementsRes.data }));
+      // Also fetch individual expenses
+      let expensesList = [];
+      try {
+        const expRes = await axios.get(`${API_BASE}/collaboration-trips/${tripId}/expenses`);
+        expensesList = expRes.data || [];
+      } catch (e) {}
+
+      setSettlements(prev => ({ ...prev, [tripId]: { ...settlementsRes.data, expenses: expensesList } }));
       setTripMembers(prev => ({ ...prev, [tripId]: membersRes.data || [] }));
       setBookings(prev => ({ ...prev, [tripId]: bookingsRes.data || [] }));
       setTripDetails(prev => ({ ...prev, [tripId]: tripRes.data }));
@@ -633,11 +640,31 @@ export default function UserProfile() {
                           
                           {settlements[activeSplitId] && (
                             <div className="settlements-list">
-                              <h5 style={{ fontSize: '0.9rem', marginBottom: '10px', color: '#475569' }}>Current Balances:</h5>
-                              {settlements[activeSplitId].settlements.length === 0 ? (
+                              {/* Expense Transactions */}
+                              {settlements[activeSplitId].expenses?.length > 0 && (
+                                <div style={{ marginBottom: 16 }}>
+                                  <h5 style={{ fontSize: '0.9rem', marginBottom: 10, color: '#475569' }}>Expense Transactions:</h5>
+                                  {settlements[activeSplitId].expenses.map((exp, idx) => (
+                                    <div key={idx} style={{ background: '#fff', padding: '10px 15px', borderRadius: 10, marginBottom: 8, border: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                      <div>
+                                        <strong style={{ fontSize: '0.9rem' }}>{exp.description}</strong>
+                                        <span style={{ display: 'block', fontSize: '0.78rem', color: '#64748b', marginTop: 2 }}>
+                                          Paid by {exp.paidByName || exp.paidByEmail} · Split {exp.splitType === 'CUSTOM' ? 'custom' : 'equally'}
+                                        </span>
+                                      </div>
+                                      <span style={{ color: '#6366f1', fontWeight: 700, fontSize: '1rem' }}>₹{exp.amount}</span>
+                                    </div>
+                                  ))}
+                                  <div style={{ textAlign: 'right', fontSize: '0.85rem', color: '#475569', marginTop: 4 }}>
+                                    Total: <strong>₹{settlements[activeSplitId].totalExpenses || 0}</strong>
+                                  </div>
+                                </div>
+                              )}
+                              <h5 style={{ fontSize: '0.9rem', marginBottom: '10px', color: '#475569' }}>Who Owes What:</h5>
+                              {settlements[activeSplitId].settlements?.length === 0 ? (
                                 <p style={{ fontSize: '0.85rem' }}>All settled up! Add an expense to see balances.</p>
                               ) : (
-                                settlements[activeSplitId].settlements.map((s, idx) => (
+                                settlements[activeSplitId].settlements?.map((s, idx) => (
                                   <div key={idx} className="settlement-item" style={{ background: '#fff', padding: '10px 15px', borderRadius: '10px', marginBottom: '8px', border: '1px solid #e2e8f0' }}>
                                     <CheckCircle size={14} style={{ color: '#10b981', flexShrink: 0 }} />
                                     <div style={{ fontSize: '0.9rem' }}>

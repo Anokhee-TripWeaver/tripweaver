@@ -29,13 +29,16 @@ public class GeminiController {
         String destination = payload.get("destination");
         String startDate = payload.get("startDate");
         String endDate = payload.get("endDate");
+        String travelWith = payload.getOrDefault("travelWith", "solo");
+        String interests = payload.getOrDefault("interests", "");
+        String budget = payload.getOrDefault("budget", "moderate");
+        String pace = payload.getOrDefault("pace", "moderate");
 
         if (destination == null || startDate == null || endDate == null) {
             return ResponseEntity.badRequest()
                     .body("Missing required fields: destination, startDate, endDate");
         }
 
-        // Validate Dates
         try {
             var start = java.time.LocalDate.parse(startDate);
             var end = java.time.LocalDate.parse(endDate);
@@ -48,7 +51,6 @@ public class GeminiController {
                     .body("Invalid date format. Use YYYY-MM-DD.");
         }
 
-        // ✅ SAVE ITINERARY HISTORY (OAuth + Manual)
         String email = SecurityUtil.getEmail(principal);
         if (email != null) {
             historyService.save(
@@ -60,7 +62,7 @@ public class GeminiController {
         }
 
         return ResponseEntity.ok(
-                geminiService.generateItinerary(destination, startDate, endDate)
+                geminiService.generateItinerary(destination, startDate, endDate, travelWith, interests, budget, pace)
         );
     }
 }

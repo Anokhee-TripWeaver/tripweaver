@@ -1,56 +1,44 @@
-import React, { useMemo, useState, useEffect } from "react";
+import React, { useMemo, useState, useEffect, useRef } from "react";
 import Navbar from "./navbar";
 import { generateItinerary } from "../services/api";
 import { useLocation } from "react-router-dom";
+import API_BASE from "../config";
 import "./ItineraryPlanner.css";
 
 export default function ItineraryPlanner() {
-  const [formData, setFormData] = useState({ destination: "", startDate: "", endDate: "" });
+  const [formData, setFormData] = useState({
+    destination: "", startDate: "", endDate: "",
+    interests: "", budget: "moderate", pace: "moderate"
+  });
   const [itinerary, setItinerary] = useState("");
+  const [editedItinerary, setEditedItinerary] = useState("");
+  const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  
+  const [emailInput, setEmailInput] = useState("");
+  const [emailStatus, setEmailStatus] = useState("");
+  const [sendingEmail, setSendingEmail] = useState(false);
+  const editRef = useRef(null);
   const location = useLocation();
 
   useEffect(() => {
     if (location.state?.restore) {
-        const h = location.state.restore;
-        // Parse query if possible: "destination (start -> end)"
-        // Or use h.destination if available (SearchHistory has it?)
-        // Backend SearchHistory model has 'destination', 'searchDate' but maybe not separate 'startDate'/'endDate'
-        // But the 'query' string in GeminiController is formatted as "Dest (Start -> End)"
-        
-        let dest = h.destination || "";
-        let start = "";
-        let end = "";
-        
-        // Try parsing query string if structured
-        if (h.query && h.query.includes("(") && h.query.includes("→")) {
-            try {
-                // Example: "Paris (2025-01-01 → 2025-01-05)"
-                const parts = h.query.split("(");
-                if (parts.length > 0) {
-                     dest = parts[0].trim();
-                     const datePart = parts[1].replace(")", ""); // "2025-01-01 → 2025-01-05"
-                     const dates = datePart.split("→");
-                     if (dates.length === 2) {
-                         start = dates[0].trim();
-                         end = dates[1].trim();
-                     }
-                }
-            } catch (e) {
-                console.log("Error parsing history query", e);
-            }
-        }
-        setFormData({
-            destination: dest,
-            startDate: start,
-            endDate: end
-        });
-        
-        // Optionally auto-submit if we have all data?
-        // Let's just pre-fill for now to let user confirm.
+      const h = location.state.restore;
+      let dest = h.destination || "";
+      let start = "", end = "";
+      if (h.query && h.query.includes("(") && h.query.includes("→")) {
+        try {
+          const parts = h.query.split("(");
+          dest = parts[0].trim();
+          const dates = parts[1].replace(")", "").split("→");
+          if (dates.length === 2) { start = dates[0].trim(); end = dates[1].trim(); }
+        } catch (e) {}
+      }
+      setFormData(prev => ({ ...prev, destination: dest, startDate: start, endDate: end }));
     }
+    // Pre-fill email from session
+    const savedEmail = sessionStorage.getItem("email") || localStorage.getItem("email") || "";
+    if (savedEmail) setEmailInput(savedEmail);
   }, [location.state]);
 
   const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -59,10 +47,13 @@ export default function ItineraryPlanner() {
     e.preventDefault();
     setLoading(true);
     setError("");
-    setItinerary(""); // Clear previous results
+    setItinerary("");
+    setEditedItinerary("");
+    setIsEditing(false);
     try {
       const response = await generateItinerary(formData);
       setItinerary(response.data);
+      setEditedItinerary(response.data);
     } catch (err) {
       setError("Failed to generate itinerary. Please try again.");
     } finally {
@@ -70,15 +61,65 @@ export default function ItineraryPlanner() {
     }
   };
 
+  const handleEdit = () => {
+    setIsEditing(true);
+    setTimeout(() => editRef.current?.focus(), 100);
+  };
+
+  const handleSaveEdit = () => {
+    setItinerary(editedItinerary);
+    setIsEditing(false);
+  };
+
+  const handleSendEmail = async () => {
+    if (!emailInput || !emailInput.includes("@")) {
+      setEmailStatus("❌ Please enter a valid email address.");
+      return;
+    }
+    setSendingEmail(true);
+    setEmailStatus("");
+    try {
+      const content = itinerary
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/^#{1,3} (.+)$/gm, '<h3 style="color:#e85d26;margin:16px 0 8px">$1</h3>')
+        .replace(/^DAY (\d+)/gm, '<h3 style="color:#e85d26;margin:20px 0 8px">DAY $1</h3>')
+        .replace(/^---$/gm, '<hr style="border:1px solid #eee;margin:16px 0">')
+        .replace(/\n/g, '<br>');
+
+      const res = await fetch(`${API_BASE}/chat/agent/send-email`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          toEmail: emailInput,
+          subject: `TripWeaver Itinerary - ${formData.destination}`,
+          content: `<html><body style="font-family:Arial;padding:20px;max-width:700px;margin:auto">
+            <div style="background:linear-gradient(135deg,#e85d26,#f97316);padding:20px;border-radius:10px 10px 0 0;text-align:center">
+              <h2 style="color:white;margin:0">✈️ Your TripWeaver Itinerary</h2>
+              <p style="color:rgba(255,255,255,0.9);margin:8px 0 0">${formData.destination} · ${formData.startDate} to ${formData.endDate}</p>
+            </div>
+            <div style="background:#fff;padding:24px;border:1px solid #eee;border-radius:0 0 10px 10px;line-height:1.8">
+              ${content}
+            </div>
+            <p style="text-align:center;color:#888;margin-top:16px;font-size:0.85rem">Generated by TripWeaver AI ✈️</p>
+          </body></html>`
+        }),
+        credentials: "include"
+      });
+      const data = await res.json();
+      setEmailStatus(res.ok ? `✅ Itinerary sent to ${emailInput}!` : `❌ ${data.error}`);
+    } catch (err) {
+      setEmailStatus("❌ Failed to send email.");
+    } finally {
+      setSendingEmail(false);
+    }
+  };
+
   const parsedDays = useMemo(() => {
     if (!itinerary) return [];
-    const sections = itinerary.split(/(?=Day \d+)/); 
+    const sections = itinerary.split(/(?=Day \d+|DAY \d+)/i);
     return sections.map(section => {
       const lines = section.trim().split("\n");
-      return {
-        title: lines[0], 
-        activities: lines.slice(1).filter(line => line.trim() !== "")
-      };
+      return { title: lines[0], activities: lines.slice(1).filter(l => l.trim()) };
     }).filter(day => day.title);
   }, [itinerary]);
 
@@ -95,63 +136,134 @@ export default function ItineraryPlanner() {
 
         <section className="planner-card">
           <form onSubmit={handleSubmit} className="planner-form">
+            {/* Destination + Dates */}
             <div className="field">
               <label>Destination</label>
-              <input 
-                type="text" 
-                name="destination" 
-                placeholder="e.g. Paris, France"
-                value={formData.destination} 
-                onChange={handleChange} 
-                required 
-              />
+              <input type="text" name="destination" placeholder="e.g. Paris, France"
+                value={formData.destination} onChange={handleChange} required />
             </div>
             <div className="field-row">
               <div className="field">
                 <label>Start Date</label>
-                <input 
-                  type="date" 
-                  name="startDate" 
-                  value={formData.startDate} 
-                  min={today}
-                  onChange={handleChange} 
-                  required 
-                />
+                <input type="date" name="startDate" value={formData.startDate}
+                  min={today} onChange={handleChange} required />
               </div>
               <div className="field">
                 <label>End Date</label>
-                <input 
-                  type="date" 
-                  name="endDate" 
-                  value={formData.endDate} 
-                  min={formData.startDate || today}
-                  onChange={handleChange} 
-                  required 
-                />
+                <input type="date" name="endDate" value={formData.endDate}
+                  min={formData.startDate || today} onChange={handleChange} required />
               </div>
             </div>
-            <button className="btn-primary" disabled={loading}>
+
+            {/* Preferences */}
+            <div style={{ borderTop: "1px solid #e2e8f0", paddingTop: 16, marginTop: 4 }}>
+              <p style={{ fontWeight: 600, marginBottom: 12, color: "#374151" }}>Preferences</p>
+
+              <div className="field-row" style={{ marginTop: 4 }}>
+                <div className="field">
+                  <label>Budget</label>
+                  <select name="budget" value={formData.budget} onChange={handleChange}
+                    style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid #e2e8f0", width: "100%" }}>
+                    <option value="budget">Budget</option>
+                    <option value="moderate">Moderate</option>
+                    <option value="luxury">Luxury</option>
+                  </select>
+                </div>
+                <div className="field">
+                  <label>Pace</label>
+                  <select name="pace" value={formData.pace} onChange={handleChange}
+                    style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid #e2e8f0", width: "100%" }}>
+                    <option value="relaxed">Relaxed</option>
+                    <option value="moderate">Moderate</option>
+                    <option value="packed">Packed</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="field" style={{ marginTop: 12 }}>
+                <label>Interests (optional)</label>
+                <input type="text" name="interests" placeholder="e.g. street food, museums, nightlife, adventure sports"
+                  value={formData.interests} onChange={handleChange}
+                  style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid #e2e8f0", width: "100%" }} />
+              </div>
+            </div>
+
+            <button className="btn-primary" disabled={loading} style={{ marginTop: 16 }}>
               {loading ? "Crafting your trip..." : "Generate Itinerary"}
             </button>
             {error && <p className="form-error">{error}</p>}
           </form>
         </section>
 
-        {parsedDays.length > 0 && (
+        {/* Results */}
+        {(parsedDays.length > 0 || isEditing) && (
           <div className="results-section">
-            {parsedDays.map((day, idx) => (
-              <div key={idx} className="day-card">
-                <h2 className="day-title">{day.title}</h2>
-                <div className="timeline">
-                  {day.activities.map((act, i) => (
-                    <div key={i} className={`timeline-item ${act.includes("Cost") ? "cost-highlight" : ""}`}>
-                      {!act.includes("Cost") && <span className="dot"></span>}
-                      <p>{act}</p>
-                    </div>
-                  ))}
-                </div>
+            {/* Action bar */}
+            <div style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap", alignItems: "center" }}>
+              {!isEditing ? (
+                <button onClick={handleEdit} style={{
+                  display: "flex", alignItems: "center", gap: 6,
+                  padding: "10px 20px", borderRadius: 8, border: "2px solid #e85d26",
+                  background: "#fff", color: "#e85d26", cursor: "pointer", fontWeight: 600
+                }}>
+                  ✏️ Edit Itinerary
+                </button>
+              ) : (
+                <button onClick={handleSaveEdit} style={{
+                  padding: "10px 20px", borderRadius: 8, border: "none",
+                  background: "#22c55e", color: "#fff", cursor: "pointer", fontWeight: 600
+                }}>
+                  ✅ Save Changes
+                </button>
+              )}
+
+              {/* Email section */}
+              <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                <input type="email" placeholder="your@email.com" value={emailInput}
+                  onChange={e => setEmailInput(e.target.value)}
+                  style={{ padding: "10px 14px", borderRadius: 8, border: "1px solid #e2e8f0", minWidth: 220 }} />
+                <button onClick={handleSendEmail} disabled={sendingEmail} style={{
+                  padding: "10px 20px", borderRadius: 8, border: "none",
+                  background: "linear-gradient(135deg,#e85d26,#f97316)", color: "#fff",
+                  cursor: "pointer", fontWeight: 600
+                }}>
+                  {sendingEmail ? "Sending..." : "📧 Send to Mail"}
+                </button>
               </div>
-            ))}
+              {emailStatus && <span style={{ fontSize: "0.9rem", color: emailStatus.startsWith("✅") ? "#22c55e" : "#ef4444" }}>{emailStatus}</span>}
+            </div>
+
+            {/* Edit mode - textarea */}
+            {isEditing ? (
+              <textarea ref={editRef} value={editedItinerary}
+                onChange={e => setEditedItinerary(e.target.value)}
+                style={{
+                  width: "100%", minHeight: 500, padding: 20, borderRadius: 12,
+                  border: "2px solid #e85d26", fontFamily: "monospace", fontSize: "0.95rem",
+                  lineHeight: 1.7, resize: "vertical", outline: "none"
+                }} />
+            ) : (
+              parsedDays.map((day, idx) => (
+                <div key={idx} className="day-card">
+                  <h2 className="day-title">{day.title}</h2>
+                  <div className="timeline">
+                    {day.activities.map((act, i) => {
+                      // Make place names clickable - detect capitalized words as place names
+                      const withLinks = act.replace(
+                        /\b([A-Z][a-zA-Z\s]{3,}(?:Temple|Fort|Gate|Mahal|Museum|Park|Palace|Market|Bridge|Tower|Church|Mosque|Lake|Beach|Garden|Monument|Memorial|Square|Street|Road|Bazaar|Chowk|Minar|Mandir|Dargah|Ghat|Hill|Valley|Falls|Cave|Island|Bay|Harbor|Port|Station|Airport))\b/g,
+                        (match) => `<a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(match)}" target="_blank" rel="noopener noreferrer" style="color:#6366f1;text-decoration:underline;cursor:pointer">${match}</a>`
+                      );
+                      return (
+                        <div key={i} className={`timeline-item ${act.includes("Cost") ? "cost-highlight" : ""}`}>
+                          {!act.includes("Cost") && <span className="dot"></span>}
+                          <p dangerouslySetInnerHTML={{ __html: withLinks }} />
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         )}
       </main>

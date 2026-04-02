@@ -1,5 +1,6 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import axios from "axios";
+import { useLocation } from "react-router-dom";
 import Navbar from "./navbar";
 import CustomModal from "./CustomModal";
 import "./DestinationSearch.css";
@@ -7,6 +8,7 @@ import API_BASE from "../config";
 
 export default function DestinationSearch() {
   const resultsRef = useRef(null);
+  const urlLocation = useLocation();
 
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("tourist_attraction");
@@ -58,7 +60,9 @@ export default function DestinationSearch() {
         category: d.category || "",
         latitude: d.latitude,
         longitude: d.longitude,
-        placeId: d.placeId, // ✅ include placeId for modal
+        placeId: d.placeId,
+        rating: d.rating || null,
+        userRatingCount: d.userRatingCount || null,
         image:
           d.photoUrl ||
           `https://source.unsplash.com/800x400/?${encodeURIComponent(
@@ -82,6 +86,22 @@ export default function DestinationSearch() {
       setLoading(false);
     }
   };
+
+  // Auto-search from URL params (used by chatbot agent)
+  useEffect(() => {
+    const params = new URLSearchParams(urlLocation.search);
+    const q = params.get('query');
+    const cat = params.get('category');
+    if (q) {
+      setQuery(q);
+      if (cat) setCategory(cat);
+      // Trigger search after state updates
+      setTimeout(() => {
+        const btn = document.querySelector('.search-btn[type="submit"]');
+        if (btn) btn.click();
+      }, 200);
+    }
+  }, [urlLocation.search]);
 
   // View more images
   const handleViewMore = async (destination) => {
@@ -190,6 +210,12 @@ export default function DestinationSearch() {
             <button className="search-btn" type="submit" disabled={loading}>
               {loading ? "Searching..." : "Search"}
             </button>
+            {results.length > 0 && (
+              <button type="button" onClick={() => { setResults([]); setQuery(""); setError(""); }}
+                style={{ padding: "10px 18px", borderRadius: 8, border: "1px solid #e2e8f0", background: "#fff", cursor: "pointer", fontWeight: 600, color: "#64748b" }}>
+                Clear
+              </button>
+            )}
           </form>
         </div>
 
@@ -217,14 +243,14 @@ export default function DestinationSearch() {
                   <strong>Category:</strong>{" "}
                   <span className="category-value">{d.category || "N/A"}</span>
                 </span>
-                <span>
-                  <strong>Coordinates:</strong>{" "}
-                  <span className="coords-value">
-                    {d.latitude && d.longitude
-                      ? `${d.latitude}, ${d.longitude}`
-                      : "N/A"}
+                {d.rating && (
+                  <span>
+                    <strong>Rating:</strong>{" "}
+                    <span style={{ color: "#f59e0b", fontWeight: 600 }}>
+                      {"★".repeat(Math.round(d.rating))}{"☆".repeat(5 - Math.round(d.rating))} {d.rating}
+                    </span>
                   </span>
-                </span>
+                )}
               </div>
               
               {/* Location Icon for Google Maps */}

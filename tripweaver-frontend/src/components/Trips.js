@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import Navbar from "./navbar";
 import { useLocation } from "react-router-dom";
@@ -13,6 +13,7 @@ function Trips() {
         endDate: "",
         budget: ""
     });
+    const [autoSearchPending, setAutoSearchPending] = useState(false);
     const [trip, setTrip] = useState(null);
     const [selectedFlight, setSelectedFlight] = useState(null);
     const [selectedReturnFlight, setSelectedReturnFlight] = useState(null);
@@ -51,26 +52,46 @@ function Trips() {
 
     // Load session data on mount
     useEffect(() => {
+        // 1. Check for agent navigation data (from chatbot) - highest priority
+        const agentNav = sessionStorage.getItem('agent_navigate');
+        if (agentNav) {
+            sessionStorage.removeItem('agent_navigate');
+            sessionStorage.removeItem('trip_session'); // clear old session so it doesn't overwrite
+            try {
+                const h = JSON.parse(agentNav);
+                console.log('[Trips] agent_navigate data:', h);
+                const newFormData = {
+                    origin: h.origin || "",
+                    destination: h.destination || "",
+                    startDate: h.searchDate || "",
+                    endDate: h.endDate || "",
+                    budget: h.budget || ""
+                };
+                setFormData(newFormData);
+                setTrip(null);
+                setStep(1);
+                if (h.autoSearch) setAutoSearchPending(true);
+                return;
+            } catch (e) { console.error('agent_navigate parse error', e); }
+        }
+
+        // 2. Check if we are restoring from history (passed via navigate state)
         const restoreData = location.state?.restore;
-        // 1. Check if we are restoring from history (passed via navigate state)
         if (restoreData) {
             const h = restoreData;
-            // Map SearchHistory fields to Trips formData
-            // SearchHistory: origin, destination, searchDate, etc.
-            // Trips formData: origin, destination, startDate, endDate, budget
-            // Note: History might store single date or range. We need to be flexible.
-            
             const newFormData = {
                 origin: h.origin || "",
                 destination: h.destination || "",
-                startDate: h.searchDate || "", // Assuming single date or start date
-                endDate: "", // Might need to infer or leave empty
-                budget: "" // Budget isn't stored in history currently
+                startDate: h.searchDate || "",
+                endDate: h.endDate || "",
+                budget: h.budget || ""
             };
             setFormData(newFormData);
-            // Optionally clear step to 1 to let user re-enter budget/end-date if missing
-            setStep(1); 
-            return; // Skip session storage load if restoring
+            setStep(1);
+            if (h.autoSearch && h.origin && h.destination && h.searchDate && h.endDate && h.budget) {
+                setAutoSearchPending(true);
+            }
+            return;
         }
 
         // 2. Otherwise load from session storage
@@ -91,8 +112,12 @@ function Trips() {
         }
     }, [location.state]);
 
-    // Save session data whenever state changes
+    // Save session data whenever state changes (skip first render)
+    const isFirstRender = useRef(true);
     useEffect(() => {
+        if (isFirstRender.current) { isFirstRender.current = false; return; }
+        // Don't save if formData is empty (agent pre-fill case)
+        if (!formData.origin && !formData.destination) return;
         const sessionData = {
             formData,
             trip,
@@ -104,6 +129,17 @@ function Trips() {
         };
         sessionStorage.setItem("trip_session", JSON.stringify(sessionData));
     }, [formData, trip, selectedFlight, selectedReturnFlight, selectedHotel, returnFlights, step]);
+
+    // Auto-search when agent pre-fills the form
+    useEffect(() => {
+        if (!autoSearchPending) return;
+        if (!formData.origin || !formData.destination || !formData.startDate || !formData.endDate || !formData.budget) return;
+        setAutoSearchPending(false);
+        setTimeout(() => {
+            const btn = document.querySelector('button[type="submit"].search-btn');
+            if (btn) btn.click();
+        }, 100);
+    }, [autoSearchPending, formData]);
 
     // Clear comparison list and modal whenever step changes
     useEffect(() => {

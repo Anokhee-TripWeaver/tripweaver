@@ -27,7 +27,7 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
         String email = oauthUser.getAttribute("email");
         String name  = oauthUser.getAttribute("name");
 
-        String redirectUrl = frontendUrl + "/profile"
+        String redirectUrl = frontendUrl
                 + "?oauth=true"
                 + "&username=" + URLEncoder.encode(name  != null ? name  : "", StandardCharsets.UTF_8)
                 + "&email="    + URLEncoder.encode(email != null ? email : "", StandardCharsets.UTF_8);

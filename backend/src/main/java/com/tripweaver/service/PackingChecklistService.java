@@ -64,79 +64,93 @@ public class PackingChecklistService {
      * Get default packing items based on destination
      */
     private List<String> getDefaultItemsForDestination(String destination) {
-        if (destination == null) {
-            return getDefaultItems();
-        }
+        if (destination == null) return getDefaultItems();
+        String d = destination.toLowerCase();
 
-        String lowerDest = destination.toLowerCase();
-
-        // Beach destinations
-        if (lowerDest.contains("goa") || lowerDest.contains("bali") || 
-            lowerDest.contains("maldives") || lowerDest.contains("phuket") ||
-            lowerDest.contains("miami") || lowerDest.contains("hawaii")) {
+        // Beach
+        if (d.contains("goa") || d.contains("bali") || d.contains("maldives") ||
+            d.contains("phuket") || d.contains("miami") || d.contains("hawaii") ||
+            d.contains("beach") || d.contains("island") || d.contains("coast")) {
             return Arrays.asList(
-                "Passport", "Sunscreen (SPF 50+)", "Beachwear", "Sunglasses",
-                "Flip-flops", "Beach towel", "Swimsuit", "Hat",
-                "Waterproof phone case", "Light clothing", "Charger", "Camera"
+                "Passport / ID", "Sunscreen SPF 50+", "Beachwear", "Sunglasses",
+                "Flip-flops", "Beach towel", "Hat / Cap", "Waterproof phone case",
+                "Light breathable clothing", "Charger & power bank", "Camera",
+                "Reusable water bottle", "Insect repellent", "Travel insurance docs"
             );
         }
 
-        // European cities
-        if (lowerDest.contains("paris") || lowerDest.contains("london") ||
-            lowerDest.contains("rome") || lowerDest.contains("barcelona") ||
-            lowerDest.contains("amsterdam") || lowerDest.contains("berlin")) {
+        // Cold / Snow
+        if (d.contains("switzerland") || d.contains("iceland") || d.contains("norway") ||
+            d.contains("canada") || d.contains("alaska") || d.contains("finland") ||
+            d.contains("sweden") || d.contains("manali") || d.contains("shimla") ||
+            d.contains("kashmir") || d.contains("leh") || d.contains("snow")) {
             return Arrays.asList(
-                "Passport", "Travel adapter (Type C/E)", "Comfortable walking shoes",
-                "Light jacket", "Umbrella", "Day backpack", "Charger",
-                "Camera", "Reusable water bottle", "Clothes", "Toiletries", "Medications"
+                "Passport / ID", "Heavy winter jacket", "Thermal inner wear",
+                "Gloves & mittens", "Woollen scarf", "Snow boots", "Wool socks",
+                "Lip balm & moisturiser", "Sunglasses (UV protection)", "Hand warmers",
+                "Charger & power bank", "Camera", "Travel insurance docs", "Medications"
             );
         }
 
-        // Asian cities
-        if (lowerDest.contains("tokyo") || lowerDest.contains("singapore") ||
-            lowerDest.contains("bangkok") || lowerDest.contains("seoul") ||
-            lowerDest.contains("hong kong") || lowerDest.contains("dubai")) {
+        // Adventure / Trekking
+        if (d.contains("nepal") || d.contains("peru") || d.contains("new zealand") ||
+            d.contains("costa rica") || d.contains("rishikesh") || d.contains("trek") ||
+            d.contains("hiking") || d.contains("safari")) {
             return Arrays.asList(
-                "Passport", "Power bank", "Walking shoes", "Light clothing",
-                "Rail pass/Transport card", "Charger", "Camera",
-                "Hand sanitizer", "Face mask", "Reusable bag", "Toiletries", "Medications"
+                "Passport / ID", "Sturdy hiking boots", "Trekking backpack",
+                "First aid kit", "Reusable water bottle", "Sunscreen", "Insect repellent",
+                "Torch / headlamp", "Rain jacket / poncho", "Energy bars / snacks",
+                "Charger & power bank", "Camera", "Travel insurance docs", "Medications"
             );
         }
 
-        // Cold destinations
-        if (lowerDest.contains("switzerland") || lowerDest.contains("iceland") ||
-            lowerDest.contains("norway") || lowerDest.contains("canada") ||
-            lowerDest.contains("alaska")) {
+        // Europe
+        if (d.contains("paris") || d.contains("london") || d.contains("rome") ||
+            d.contains("barcelona") || d.contains("amsterdam") || d.contains("berlin") ||
+            d.contains("prague") || d.contains("vienna") || d.contains("europe")) {
             return Arrays.asList(
-                "Passport", "Warm jacket", "Thermal wear", "Gloves",
-                "Scarf", "Winter boots", "Wool socks", "Lip balm",
-                "Moisturizer", "Charger", "Camera", "Clothes", "Toiletries"
+                "Passport & visa documents", "Travel adapter (Type C/G)", "Comfortable walking shoes",
+                "Light jacket / trench coat", "Compact umbrella", "Day backpack",
+                "Charger & power bank", "Camera", "Reusable water bottle",
+                "Smart casual outfits", "Toiletries", "Travel insurance docs", "Medications"
             );
         }
 
-        // Adventure destinations
-        if (lowerDest.contains("nepal") || lowerDest.contains("peru") ||
-            lowerDest.contains("new zealand") || lowerDest.contains("costa rica")) {
+        // Asia
+        if (d.contains("tokyo") || d.contains("singapore") || d.contains("bangkok") ||
+            d.contains("seoul") || d.contains("hong kong") || d.contains("dubai") ||
+            d.contains("vietnam") || d.contains("indonesia") || d.contains("malaysia")) {
             return Arrays.asList(
-                "Passport", "Hiking boots", "Backpack", "First aid kit",
-                "Water bottle", "Sunscreen", "Insect repellent", "Flashlight",
-                "Multi-tool", "Rain jacket", "Charger", "Power bank", "Clothes"
+                "Passport & visa documents", "Power bank", "Comfortable walking shoes",
+                "Light breathable clothing", "Transport card / cash", "Charger",
+                "Camera", "Hand sanitiser", "Reusable bag", "Sunscreen",
+                "Toiletries", "Travel insurance docs", "Medications"
             );
         }
 
-        // Default items for any destination
+        // India domestic
+        if (d.contains("india") || d.contains("delhi") || d.contains("mumbai") ||
+            d.contains("bangalore") || d.contains("hyderabad") || d.contains("chennai") ||
+            d.contains("kolkata") || d.contains("jaipur") || d.contains("agra") ||
+            d.contains("kerala") || d.contains("rajasthan")) {
+            return Arrays.asList(
+                "Aadhaar / ID proof", "Booking confirmations", "Comfortable clothing",
+                "Walking shoes & sandals", "Sunscreen", "Reusable water bottle",
+                "Power bank & charger", "Camera", "Cash & UPI-enabled phone",
+                "Light jacket (evenings)", "Toiletries", "Medications", "Insect repellent"
+            );
+        }
+
         return getDefaultItems();
     }
 
-    /**
-     * Default packing items for any trip
-     */
     private List<String> getDefaultItems() {
         return Arrays.asList(
-            "Passport", "Visa (if required)", "Travel insurance documents",
-            "Flight tickets", "Hotel confirmations", "Charger", "Power bank",
-            "Clothes", "Underwear", "Socks", "Toiletries", "Medications",
-            "Sunglasses", "Wallet", "Credit cards", "Cash", "Phone"
+            "Passport / ID", "Visa documents (if required)", "Travel insurance docs",
+            "Flight & hotel confirmations", "Charger & power bank", "Camera",
+            "Comfortable walking shoes", "Weather-appropriate clothing",
+            "Toiletries", "Medications", "Sunglasses", "Wallet & cards",
+            "Cash (local currency)", "Reusable water bottle", "Day backpack"
         );
     }
 
