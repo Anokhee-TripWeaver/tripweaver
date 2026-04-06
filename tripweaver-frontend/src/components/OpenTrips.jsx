@@ -703,7 +703,6 @@ function OpenTrips({ onTripsLoaded }) {
 
   const loadPosts = useCallback(async () => {
     setIsLoading(true);
-    // Show cached data immediately while API loads
     const cached = getLocalPosts();
     if (cached.length > 0) {
       const filteredCached = cached.filter((post) => {
@@ -724,25 +723,21 @@ function OpenTrips({ onTripsLoaded }) {
         const notPast = post.endDate ? new Date(post.endDate) >= new Date(new Date().toDateString()) : true;
         return hasHost && hasSeats && notPast;
       });
-      const enriched = await mergeMissingDetailsFromSavedTrips(filtered);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(enriched));
-      const sorted = sortPostsByCreatedAt(enriched);
+      // Skip enrichment - use data directly for speed
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered));
+      const sorted = sortPostsByCreatedAt(filtered);
       setPosts(sorted);
       if (onTripsLoaded) onTripsLoaded(sorted);
       setSyncMessage("");
     } catch (error) {
       const localPosts = getLocalPosts();
       const filteredLocal = localPosts.filter((post) => Boolean((post.hostEmail || post.email || "").toString().trim()) && (Number(post.seatsAvailable) || 0) > 0);
-      if (filteredLocal.length !== localPosts.length) {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(filteredLocal));
-      }
-      const enrichedLocal = await mergeMissingDetailsFromSavedTrips(filteredLocal);
-      setPosts(sortPostsByCreatedAt(enrichedLocal));
+      setPosts(sortPostsByCreatedAt(filteredLocal));
       setSyncMessage("Showing local posts. Backend sync is not available.");
     } finally {
       setIsLoading(false);
     }
-  }, [mergeMissingDetailsFromSavedTrips]);
+  }, [onTripsLoaded]);
 
   useEffect(() => {
     loadPosts();

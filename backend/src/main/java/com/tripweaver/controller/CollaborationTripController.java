@@ -19,6 +19,9 @@ import com.tripweaver.model.TripBooking;
 import com.tripweaver.service.CollaborationTripService;
 import com.tripweaver.service.EmailService;
 import com.tripweaver.service.JoinRequestService;
+import com.tripweaver.service.TripChatService;
+import com.tripweaver.service.TripExpenseService;
+import com.tripweaver.service.JoinRequestService;
 import com.tripweaver.service.TripExpenseService;
 import com.tripweaver.repository.TripBookingRepository;
 import com.tripweaver.repository.CollaborationTripRepository;
@@ -50,6 +53,9 @@ public class CollaborationTripController {
 
     @Autowired
     private TripExpenseService tripExpenseService;
+
+    @Autowired
+    private TripChatService tripChatService;
 
     @Autowired
     private TripBookingRepository tripBookingRepository;
@@ -311,6 +317,26 @@ public class CollaborationTripController {
         } catch (Exception ex) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of("message", "Failed to send acceptance email"));
+        }
+    }
+
+    @GetMapping("/{tripId}/chat")
+    public ResponseEntity<?> getTripChatMessages(@PathVariable Long tripId) {
+        try {
+            return ResponseEntity.ok(Map.of("messages", tripChatService.getMessages(tripId)));
+        } catch (Throwable ex) {
+            return ResponseEntity.ok(Map.of("messages", Collections.emptyList()));
+        }
+    }
+
+    @PostMapping("/{tripId}/chat")
+    public ResponseEntity<?> addTripChatMessage(@PathVariable Long tripId,
+                                                 @RequestBody Map<String, Object> payload) {
+        try {
+            return ResponseEntity.ok(Map.of("message", tripChatService.addMessage(tripId, payload)));
+        } catch (Throwable ex) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of("message", ex.getMessage() == null ? "Failed to send message" : ex.getMessage()));
         }
     }
 }

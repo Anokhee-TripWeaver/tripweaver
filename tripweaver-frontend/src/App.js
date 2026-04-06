@@ -17,6 +17,8 @@ import PaymentPage from "./components/PaymentPage";
 import Bookings from "./components/Bookings";
 import Chatbot from "./components/Chatbot";
 import AboutUs from "./components/AboutUs";
+import AdminLogin from "./components/AdminLogin";
+import AdminDashboard from "./components/AdminDashboard";
 import ProtectedRoute from "./components/ProtectedRoute";
 
 import "./App.css";
@@ -90,7 +92,13 @@ function Layout() {
 function App() {
   return (
     <Router>
-      <Layout />
+      <Routes>
+        {/* Admin routes - completely separate, no main navbar */}
+        <Route path="/admin" element={<AdminLogin />} />
+        <Route path="/admin/dashboard/*" element={<AdminDashboard />} />
+        {/* Main app */}
+        <Route path="/*" element={<Layout />} />
+      </Routes>
     </Router>
   );
 }

@@ -210,12 +210,6 @@ export default function DestinationSearch() {
             <button className="search-btn" type="submit" disabled={loading}>
               {loading ? "Searching..." : "Search"}
             </button>
-            {results.length > 0 && (
-              <button type="button" onClick={() => { setResults([]); setQuery(""); setError(""); }}
-                style={{ padding: "10px 18px", borderRadius: 8, border: "1px solid #e2e8f0", background: "#fff", cursor: "pointer", fontWeight: 600, color: "#64748b" }}>
-                Clear
-              </button>
-            )}
           </form>
         </div>
 
@@ -239,10 +233,6 @@ export default function DestinationSearch() {
               <h3>{d.name}</h3>
               <p className="address">{d.address || "Address not available"}</p>
               <div className="details-row">
-                <span>
-                  <strong>Category:</strong>{" "}
-                  <span className="category-value">{d.category || "N/A"}</span>
-                </span>
                 {d.rating && (
                   <span>
                     <strong>Rating:</strong>{" "}
@@ -290,7 +280,14 @@ export default function DestinationSearch() {
       {/* Modal */}
       {modalOpen && (
         <div className="modal-overlay" onClick={() => setModalOpen(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ position: 'relative' }}>
+            <button onClick={() => setModalOpen(false)} style={{
+              position: 'absolute', top: 10, right: 12,
+              background: 'rgba(0,0,0,0.15)', border: 'none', borderRadius: '50%',
+              width: 30, height: 30, fontSize: '1rem', cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: '#333', fontWeight: 700, lineHeight: 1
+            }}>✕</button>
             <h2>{modalTitle}</h2>
 
             {modalImages.length > 0 && (
@@ -335,11 +332,9 @@ export default function DestinationSearch() {
               ))}
             </div>
 
-            <button className="close-btn" onClick={() => setModalOpen(false)}>
-              Close
-            </button>
+            </div>
           </div>
-        </div>
+       
       )}
 
       {/* Custom Modal */}
